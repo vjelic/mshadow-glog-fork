@@ -59,12 +59,12 @@ inline void FreeHost_(void * dptr);
 template<>
 inline void *AllocHost_<gpu>(size_t size) {
   void *dptr;
-  MSHADOW_CUDA_CALL(cudaMallocHost(&dptr, size, cudaHostAllocPortable));
+  MSHADOW_CUDA_CALL(hipMallocHost(&dptr, size, hipHostAllocPortable));
   return dptr;
 }
 template<>
 inline void FreeHost_<gpu>(void *dptr) {
-  MSHADOW_CUDA_CALL(cudaFreeHost(dptr));
+  MSHADOW_CUDA_CALL(hipFreeHost(dptr));
 }
 #endif
 

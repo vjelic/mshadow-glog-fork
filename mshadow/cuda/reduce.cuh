@@ -1,3 +1,4 @@
+#include <hip/hip_runtime.h>
 /*!
  *  Copyright (c) 2014 by Contributors
  * \file reduce.cuh
@@ -87,7 +88,7 @@ inline __device__ void ReduceX(volatile DType  buf[], int tid) {
 }
 template<typename Reducer, int x_bits, typename DType>
 inline __device__ void Reduce1D(volatile DType buf[1 << x_bits]) {
-  ReduceX<Reducer, x_bits>(buf, threadIdx.x);
+  ReduceX<Reducer, x_bits>(buf, hipThreadIdx_x);
 }
 // reduce with a upper bound
 #define __RD_NON_ALIGN(els, x_bits)                                     \
@@ -102,7 +103,7 @@ inline __device__ void Reduce1D(volatile DType buf[1 << x_bits]) {
 
 template<typename Reducer, int xmax_bits, typename DType>
 inline __device__ void Reduce1DNotAlign(volatile DType buf[], int x_size) {
-  int tid = threadIdx.x;
+  int tid = hipThreadIdx_x;
   __RD_NON_ALIGN(, 8)
   __RD_NON_ALIGN(else, 7)
   __RD_NON_ALIGN(else, 6)
