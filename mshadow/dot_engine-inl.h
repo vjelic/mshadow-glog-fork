@@ -543,7 +543,7 @@ struct BLASEngine<gpu, float> {
     if (workspace == NULL) {
       // Allocate the workspace if it's NULL.
       // TODO(sxjscience) Try to move the allocation inside Tensor, which is thread-safe.
-      cudaMalloc(reinterpret_cast<void**>(&workspace), 3 * batch_count * sizeof(float*));
+      hipMalloc(reinterpret_cast<void**>(&workspace), 3 * batch_count * sizeof(float*));
       alloc_workspace = true;
     }
     GetBatchedView(workspace, const_cast<float*>(A), batch_count, m * k, stream);
@@ -557,7 +557,7 @@ struct BLASEngine<gpu, float> {
                                             &beta, workspace + 2 * batch_count, ldc, batch_count);
     CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: SgemmBatched fail";
     if (alloc_workspace) {
-      cudaFree(workspace);
+      hipFree(workspace);
     }
 #else
     for (int i = 0; i < batch_count; ++i) {
@@ -652,7 +652,7 @@ struct BLASEngine<gpu, double> {
     if (workspace == NULL) {
       // Allocate the workspace if it's NULL.
       // TODO(sxjscience) Try to move the allocation inside Tensor, which is thread-safe.
-      cudaMalloc(reinterpret_cast<void**>(&workspace), 3 * batch_count * sizeof(double*));
+      hipMalloc(reinterpret_cast<void**>(&workspace), 3 * batch_count * sizeof(double*));
       alloc_workspace = true;
     }
     GetBatchedView(workspace, const_cast<double*>(A), batch_count, m * k, stream);
@@ -666,7 +666,7 @@ struct BLASEngine<gpu, double> {
                                             &beta, workspace + 2 * batch_count, ldc, batch_count);
     CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: DgemmBatched fail";
     if (alloc_workspace) {
-      cudaFree(workspace);
+      hipFree(workspace);
     }
 #else
     for (int i = 0; i < batch_count; ++i) {

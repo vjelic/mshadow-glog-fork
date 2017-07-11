@@ -143,13 +143,20 @@ extern "C" {
 #endif
 
 #if MSHADOW_USE_CUDA
-  #include <cuda.h>
+  #include <hip/hip_runtime.h>
   #include <cublas_v2.h>
   #include <curand.h>
 #endif
 
 #if MSHADOW_USE_CUDNN == 1
-  #include <cudnn.h>
+  #include <miopen/miopen.h>
+
+  //Temporarily defined to enable the cudnn path for debugging
+  #define CUDNN_MAJOR      6
+  #define CUDNN_MINOR      0
+  #define CUDNN_PATCHLEVEL 21
+  #define CUDNN_VERSION    (CUDNN_MAJOR * 1000 + CUDNN_MINOR * 100 + CUDNN_PATCHLEVEL)
+
 #endif
 
 #if MSHADOW_USE_NVML
@@ -214,12 +221,12 @@ extern "C" {
  */
 #define MSHADOW_CUDA_CALL(func)                                    \
   {                                                                \
-    cudaError_t e = (func);                                        \
-    if (e == cudaErrorCudartUnloading) {                           \
-      throw dmlc::Error(cudaGetErrorString(e));                    \
+    hipError_t e = (func);                                        \
+    if (e == hipErrorDeinitialized) {                           \
+      throw dmlc::Error(hipGetErrorString(e));                    \
     }                                                              \
-    CHECK(e == cudaSuccess)                                        \
-        << "CUDA: " << cudaGetErrorString(e);                      \
+    CHECK(e == hipSuccess)                                        \
+        << "CUDA: " << hipGetErrorString(e);                      \
   }
 
 /*!
@@ -276,15 +283,16 @@ template<>
 struct DataType<float> {
   static const int kFlag = kFloat32;
 #if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1)
-  static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_FLOAT;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
   typedef float ScaleType;
 #endif
 };
 template<>
 struct DataType<double> {
   static const int kFlag = kFloat64;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1)
-  static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_DOUBLE;
+#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+  //static const miopenDataType_t kCudnnFlag = CUDNN_DATA_DOUBLE;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
   typedef double ScaleType;
 #endif
 };
@@ -292,7 +300,7 @@ template<>
 struct DataType<half::half_t> {
   static const int kFlag = kFloat16;
 #if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1)
-  static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_HALF;
+  static const miopenDataType_t kCudnnFlag = miopenHalf;
   typedef float ScaleType;
 #endif
 };
@@ -304,7 +312,8 @@ template<>
 struct DataType<int32_t> {
   static const int kFlag = kInt32;
 #if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
-  static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT32;
+  //static const miopenDataType_t kCudnnFlag = CUDNN_DATA_INT32;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
   typedef int32_t ScaleType;
 #endif
 };
@@ -334,7 +343,7 @@ template<>
 struct LayoutType<kNCHW> {
   static const index_t kNdim = 4;
 #if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
@@ -344,7 +353,7 @@ template<>
 struct LayoutType<kNHWC> {
   static const index_t kNdim = 4;
 #if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC;
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
@@ -357,7 +366,7 @@ template<>
 struct LayoutType<kNCDHW> {
   static const index_t kNdim = 5;
 #if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
@@ -367,7 +376,7 @@ template<>
 struct LayoutType<kNDHWC> {
   static const index_t kNdim = 5;
 #if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC;
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
