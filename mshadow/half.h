@@ -11,7 +11,7 @@
 
 #if (MSHADOW_USE_CUDA && CUDA_VERSION >= 7050)
   #define MSHADOW_CUDA_HALF 1
-  #include <cuda_fp16.h>
+  #include <hip/hip_fp16.h>
   #if defined(__CUDA_ARCH__)
     /*! \brief __half2float_warp */
     __host__ __device__ float __half2float_warp(const volatile __half& h) { /* NOLINT(*) */
