@@ -365,35 +365,35 @@ class Random<gpu, DType> {
    * \param seed random number seed
    */
   explicit Random(int seed) {
-    curandStatus_t status;
-    status = curandCreateGenerator(&gen_, CURAND_RNG_PSEUDO_DEFAULT);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "Can not create CURAND Generator";
+    hiprngStatus_t status;
+    status = hiprngCreateGenerator(&gen_, HIPRNG_RNG_PSEUDO_DEFAULT);
+    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "Can not create CURAND Generator";
     this->Seed(seed);
     buffer_.Resize(Shape1(kRandBufferSize));
   }
   ~Random(void) MSHADOW_THROW_EXCEPTION {
-    curandStatus_t status;
-    status = curandDestroyGenerator(gen_);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "Destory CURAND Gen failed";
+    hiprngStatus_t status;
+    status = hiprngDestroyGenerator(gen_);
+    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "Destory CURAND Gen failed";
   }
   /*!
    * \brief set the stream of computation
    * \param stream computation stream
    */
   inline void set_stream(Stream<gpu> *stream) {
-    curandStatus_t status;
-    status = curandSetStream(gen_, Stream<gpu>::GetStream(stream));
+    hiprngStatus_t status;
+    status = hiprngSetStream(gen_, Stream<gpu>::GetStream(stream));
 
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "set_stream CURAND failed";
+    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "set_stream CURAND failed";
   }
   /*!
    * \brief seed random number generator using this seed
    * \param seed seed of prng
    */
   inline void Seed(int seed) {
-    curandStatus_t status;
-    status = curandSetPseudoRandomGeneratorSeed(gen_, seed);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "Set CURAND seed failed.";
+    hiprngStatus_t status;
+    status = hiprngSetPseudoRandomGeneratorSeed(gen_, seed);
+    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "Set CURAND seed failed.";
   }
   /*!
    * \brief generate data from uniform [a,b)
@@ -449,35 +449,35 @@ class Random<gpu, DType> {
 
  private:
   inline void GenGaussian(float *dptr, size_t size, float mu, float sigma) {
-    curandStatus_t status;
-    status = curandGenerateNormal(gen_, dptr, size, mu, sigma);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "CURAND Gen Normal float failed."
+    hiprngStatus_t status;
+    status = hiprngGenerateNormal(gen_, dptr, size, mu, sigma);
+    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "CURAND Gen Normal float failed."
                                             << " size = " << size
                                             << ",mu = " << mu
                                             << ",sigma = " << sigma;
   }
   inline void GenGaussian(double *dptr, size_t size, double mu, double sigma) {
-    curandStatus_t status;
-    status = curandGenerateNormalDouble(gen_, dptr, size, mu, sigma);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "CURAND Gen Normal double failed."
+    hiprngStatus_t status;
+    status = hiprngGenerateNormalDouble(gen_, dptr, size, mu, sigma);
+    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "CURAND Gen Normal double failed."
                                             << " size = " << size
                                             << ",mu = " << mu
                                             << ",sigma = " << sigma;
   }
   inline void GenUniform(float *dptr, size_t size) {
-    curandStatus_t status;
-    status = curandGenerateUniform(gen_, dptr, size);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "CURAND Gen Uniform float failed."
+    hiprngStatus_t status;
+    status = hiprngGenerateUniform(gen_, dptr, size);
+    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "CURAND Gen Uniform float failed."
                                             << " size = " << size;
   }
   inline void GenUniform(double *dptr, size_t size) {
-    curandStatus_t status;
-    status = curandGenerateUniformDouble(gen_, dptr, size);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "CURAND Gen Uniform double failed."
+    hiprngStatus_t status;
+    status = hiprngGenerateUniformDouble(gen_, dptr, size);
+    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "CURAND Gen Uniform double failed."
                                             << " size = " << size;
   }
   /*! \brief random numbeer generator */
-  curandGenerator_t gen_;
+  hiprngGenerator_t gen_;
   /*! \brief templ buffer */
   TensorContainer<gpu, 1, DType> buffer_;
 };  // class Random<gpu, DType>
