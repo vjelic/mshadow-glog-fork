@@ -126,7 +126,7 @@ typedef unsigned __int64 uint64_t;
   #define MSHADOW_USE_NVML 0
 #endif
 // SSE is conflict with cudacc
-#ifdef __CUDACC__
+#ifdef __HIPCC__
   #undef MSHADOW_USE_SSE
   #define MSHADOW_USE_SSE 0
 #endif
@@ -174,7 +174,7 @@ extern "C" {
 #else
 #define MSHADOW_FORCE_INLINE inline __attribute__((always_inline))
 #endif
-#ifdef __CUDACC__
+#ifdef __HIPCC__ 
   #define MSHADOW_XINLINE MSHADOW_FORCE_INLINE __device__ __host__
 #else
   #define MSHADOW_XINLINE MSHADOW_FORCE_INLINE
@@ -571,11 +571,11 @@ struct maximum {
   template<typename DType>
   MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src) { // NOLINT(*)
     using namespace std;
-#ifdef __CUDACC__
+#ifdef __HIPCC__
     dst = ::max(dst, src);
 #else
     dst = max(dst, src);
-#endif  // __CUDACC__
+#endif  // __HIPCC__
   }
   /*!
    * \brief calculate gradient of redres with respect to redsrc,
@@ -599,11 +599,11 @@ struct minimum {
   template<typename DType>
   MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src) { // NOLINT(*)
     using namespace std;
-#ifdef __CUDACC__
+#ifdef __HIPCC__
     dst = ::min(dst, src);
 #else
     dst = min(dst, src);
-#endif  // __CUDACC__
+#endif  // __HIPCC__
   }
   /*!
    * \brief calculate gradient of redres with respect to redsrc,

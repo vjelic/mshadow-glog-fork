@@ -199,7 +199,7 @@ struct Saver<sv::saveto, TFloat, Arch> {
 }  // namespace mshadow
 
 #include "packet/plain-inl.h"
-#if MSHADOW_USE_SSE && !defined(__CUDACC__)
+#if MSHADOW_USE_SSE && !defined(__HIPCC__)
 #include "packet/sse-inl.h"
 #endif
 

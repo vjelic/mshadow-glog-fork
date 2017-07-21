@@ -101,7 +101,7 @@ struct Stream<gpu> {
     blas_handle_ownership_ = OwnHandle;
     CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Create cublas handle failed";
   }
-// #if MSHADOW_USE_CUDNN && defined(__CUDACC__)
+// #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
   inline static miopenHandle_t GetDnnHandle(Stream<gpu> *stream) {
     if (stream == NULL) {
@@ -113,7 +113,7 @@ struct Stream<gpu> {
   }
 #endif
   inline void DestroyDnnHandle() {
-// #if MSHADOW_USE_CUDNN && defined(__CUDACC__)
+// #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
     if (dnn_handle_ownership_ == OwnHandle) {
       miopenStatus_t  err = miopenDestroy(dnn_handle_);
@@ -122,7 +122,7 @@ struct Stream<gpu> {
 #endif
   }
   inline void CreateDnnHandle() {
-// #if MSHADOW_USE_CUDNN == 1 && defined(__CUDACC__)
+// #if MSHADOW_USE_CUDNN == 1 && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
     this->DestroyDnnHandle();
     miopenStatus_t  err = miopenCreate(&dnn_handle_);

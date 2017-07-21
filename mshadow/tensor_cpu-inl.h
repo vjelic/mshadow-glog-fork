@@ -55,7 +55,7 @@ inline void *AllocHost_(size_t size);
 template<typename xpu>
 inline void FreeHost_(void * dptr);
 
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 template<>
 inline void *AllocHost_<gpu>(size_t size) {
   void *dptr;

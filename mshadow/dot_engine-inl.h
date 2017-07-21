@@ -10,9 +10,9 @@
 #include "./base.h"
 #include "./extension/implicit_gemm.h"
 
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 #include "./cuda/tensor_gpu-inl.cuh"
-#endif  // #ifdef __CUDACC__
+#endif  // #ifdef __HIPCC__
 
 namespace mshadow {
  /*!
@@ -33,14 +33,14 @@ inline void GetBatchedView(DType **dst, DType *src, int num, int stride,
     dst[i] = src + i * stride;
   }
 }
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 namespace cuda {};
 template<typename DType>
 inline void GetBatchedView(DType **dst, DType *src, int num, int stride,
                            Stream<gpu> *stream) {
   cuda::GetBatchedView(dst, src, num, stride, stream);
 }
-#endif  // #ifdef __CUDACC__
+#endif  // #ifdef __HIPCC__
 
 namespace expr {
 //---------------------------------------------------------------------
@@ -537,7 +537,7 @@ struct BLASEngine<gpu, float> {
                                   const float *A, int lda, const float *B, int ldb,
                                   float beta, float *C, int ldc, int batch_count,
                                   float **workspace) {
-#if defined(__CUDACC__) && CUDA_VERSION >= 4010
+#if defined(__HIPCC__) && CUDA_VERSION >= 4010
     // Cast DType* to DType** using workspace as a buffer
     bool alloc_workspace = false;
     if (workspace == NULL) {
@@ -565,7 +565,7 @@ struct BLASEngine<gpu, float> {
            A + i * m * k, lda, B + i * k * n, ldb,
            beta, C + i * m * n, ldc);
     }
-#endif  // defined(__CUDACC__) && CUDA_VERSION >= 4010
+#endif  // defined(__HIPCC__) && CUDA_VERSION >= 4010
   }
   inline static void gemv(Stream<gpu> *stream,
                           bool trans, int m, int n, float alpha,
@@ -646,7 +646,7 @@ struct BLASEngine<gpu, double> {
                                   const double *A, int lda, const double *B, int ldb,
                                   double beta, double *C, int ldc, int batch_count,
                                   double **workspace) {
-#if defined(__CUDACC__) && CUDA_VERSION >= 4010
+#if defined(__HIPCC__) && CUDA_VERSION >= 4010
     // Cast DType* to DType** using workspace as a buffer
     bool alloc_workspace = false;
     if (workspace == NULL) {
@@ -674,7 +674,7 @@ struct BLASEngine<gpu, double> {
            A + i * m * k, lda, B + i * k * n, ldb,
            beta, C + i * m * n, ldc);
     }
-#endif  // defined(__CUDACC__) && CUDA_VERSION >= 4010
+#endif  // defined(__HIPCC__) && CUDA_VERSION >= 4010
   }
   inline static void gemv(Stream<gpu> *stream,
                           bool trans, int m, int n, double alpha,

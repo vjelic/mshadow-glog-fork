@@ -95,7 +95,7 @@ inline void Copy(Tensor<gpu, dim, DType> dst,
 }  // namespace mshadow
 
 // the following part is included only if compiler is nvcc
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 #include "./cuda/tensor_gpu-inl.cuh"
 
 namespace mshadow {
@@ -225,5 +225,5 @@ inline void IndexFill(Tensor<gpu, 2, DType> dst,
   cuda::IndexFill(dst, index, src);
 }
 }  // namespace mshadow
-#endif  // __CUDACC__
+#endif  // __HIPCC__
 #endif  // MSHADOW_TENSOR_GPU_INL_H_
