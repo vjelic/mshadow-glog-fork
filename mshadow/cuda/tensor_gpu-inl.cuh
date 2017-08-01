@@ -68,7 +68,7 @@ inline void CheckLaunchParam(dim3 dimGrid, dim3 dimBlock, const char *estr = "")
 template<typename Saver, typename DstPlan,
          typename Plan, int block_dim_bits>
 __device__ void MapPlanProc(DstPlan dst, index_t xstride,
-                            Shape<2> dshape, const Plan exp, int block_idx) {
+                            Shape<2> dshape, const Plan &exp, int block_idx) {
   const index_t tid = (block_idx << block_dim_bits) + hipThreadIdx_x;
   const int y = tid / xstride;
   const int x = tid % xstride;
@@ -79,14 +79,14 @@ __device__ void MapPlanProc(DstPlan dst, index_t xstride,
 template<typename Saver,int block_dim_bits,
          typename DstPlan, typename Plan>
 __global__ void MapPlanKernel( DstPlan dst, index_t xstride,
-                              Shape<2> dshape, const Plan exp) {
+                              Shape<2> dshape, const Plan &exp) {
   MapPlanProc<Saver, DstPlan, Plan, block_dim_bits>
       (dst, xstride, dshape, exp, hipBlockIdx_x);
 }
 template<typename Saver, int block_dim_bits, int grid_size,
          typename DstPlan, typename Plan>
 __global__ void MapPlanLargeKernel( DstPlan dst, index_t xstride,
-                                   Shape<2> dshape, const Plan exp, int repeat) {
+                                   Shape<2> dshape, const Plan &exp, int repeat) {
   for (int i = 0; i < repeat; ++i) {
   MapPlanProc<Saver, DstPlan, Plan, block_dim_bits>
       (dst, xstride, dshape, exp, hipBlockIdx_x + i * grid_size);
@@ -223,7 +223,7 @@ inline void GetBatchedView(DType **dst, DType *src, int num, int stride,
   dim3 dimBlock(kBaseThreadNum);
   dim3 dimGrid(1);
   CheckLaunchParam(dimGrid, dimBlock, "GetBatchedView");
-  //hipLaunchKernelGGL(HIP_KERNEL_NAME(GetBatchedViewKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream_, dst, src, num, stride); //TODO HIP
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(GetBatchedViewKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream_, dst, src, num, stride); //TODO HIP
   MSHADOW_CUDA_POST_KERNEL_CHECK(GetBatchedViewKernel);
 }
 

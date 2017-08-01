@@ -176,7 +176,7 @@ extern "C" {
 #else
 #define MSHADOW_FORCE_INLINE inline __attribute__((always_inline))
 #endif
-#ifdef __HIPCC__ 
+#ifdef __HIPCC__
   #define MSHADOW_XINLINE MSHADOW_FORCE_INLINE __device__ __host__
 #else
   #define MSHADOW_XINLINE MSHADOW_FORCE_INLINE

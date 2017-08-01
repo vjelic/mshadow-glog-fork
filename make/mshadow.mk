@@ -27,6 +27,7 @@ ifeq ($(USE_CUDA), 0)
 	MSHADOW_CFLAGS += -DMSHADOW_USE_CUDA=0
 else
 	MSHADOW_LDFLAGS += -L/opt/rocm/hcblas/lib -lhipblas_hcc -L/opt/rocm/hcrng/lib -lhiprng_hcc -L/opt/rocm/hip/lib -lhip_hcc
+	MSHADOW_LDFLAGS += -lcuda -lcufft
 endif
 ifneq ($(USE_CUDA_PATH), NONE)
 	MSHADOW_CFLAGS += -I$(USE_CUDA_PATH)/include

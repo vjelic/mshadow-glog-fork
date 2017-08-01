@@ -57,6 +57,8 @@ struct Shape {
   index_t shape_[kDimension];
   /*! \brief default constructor, do nothing */
   MSHADOW_XINLINE Shape(void) {}
+  /*! \brief constructor taking index_t array, do nothing */
+  MSHADOW_XINLINE Shape(index_t []) {}
   /*! \brief constuctor */
   MSHADOW_XINLINE Shape(const Shape<kDimension> &s) {
     #pragma unroll

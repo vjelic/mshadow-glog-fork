@@ -527,8 +527,8 @@ struct BLASEngine<gpu, float> {
                           const float *B, int ldb, float beta,
                           float *C, int ldc) {
     hipblasStatus_t err = hipblasSgemm(Stream<gpu>::GetBlasHandle(stream),
-                GetT(transa), GetT(transb), m, n, k, &alpha,
-                A, lda, B, ldb, &beta, C, ldc);
+                GetT(transa), GetT(transb), m, n, k, const_cast<float *>(&alpha),
+                const_cast<float *>(A), lda, const_cast<float *>(B), ldb,const_cast<float *>(&beta), C, ldc);
     CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Sgemm fail";
   }
   inline static void batched_gemm(Stream<gpu> *stream,
@@ -573,7 +573,7 @@ struct BLASEngine<gpu, float> {
                           const float *X, int incX, float beta,
                           float *Y, int incY) {
     hipblasStatus_t err = hipblasSgemv(Stream<gpu>::GetBlasHandle(stream),
-                GetT(trans), m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
+                GetT(trans), m, n,const_cast<float *>(&alpha), const_cast<float *>(A), lda, const_cast<float *>(X), incX,const_cast<float *>(&beta), Y, incY);
     CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Sgemv fail";
   }
   inline static void batched_gemv(Stream<gpu> *stream,

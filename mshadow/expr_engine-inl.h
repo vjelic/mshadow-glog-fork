@@ -83,7 +83,10 @@ class Plan<Tensor<Device, 1, DType>, DType> {
 template<typename DType>
 class Plan<ScalarExp<DType>, DType> {
  public:
-  explicit Plan(DType scalar) : scalar_(scalar) {}
+  Plan(DType scalar) : scalar_(scalar) {}
+
+  Plan(Plan<ScalarExp<DType>, DType> const& A)
+    :scalar_(A.scalar_) {}
   MSHADOW_XINLINE DType Eval(index_t y, index_t x) const {
     return scalar_;
   }
@@ -121,20 +124,27 @@ class Plan<TernaryMapExp<OP, TA, TB, TC, DType, etype>, DType> {
   Plan<TB, DType> item2_;
   Plan<TC, DType> item3_;
 };
+
+
 // binary expression
 template<typename OP, typename TA, typename TB, int etype, typename DType>
 class Plan<BinaryMapExp<OP, TA, TB, DType, etype>, DType> {
  public:
-  explicit Plan(const Plan<TA, DType> &lhs, const Plan<TB, DType> &rhs)
+// explicit Plan(const Plan<TA, DType> &lhs, const Plan<TB, DType> &rhs)
+explicit  Plan(const Plan<TA, DType> &lhs, const Plan<TB, DType> &rhs)
       : lhs_(lhs), rhs_(rhs) {}
   MSHADOW_XINLINE DType Eval(index_t y, index_t x) const {
     return OP::Map(lhs_.Eval(y, x), rhs_.Eval(y, x));
   }
 
+//  Plan(const Plan<BinaryMapExp<OP, TA, TB, DType, etype>, DType> &A)
+//      : lhs_(A.lhs_), rhs_(A.rhs_) {} 
+
  private:
   Plan<TA, DType> lhs_;
   Plan<TB, DType> rhs_;
 };
+
 // unary expression
 template<typename OP, typename TA, int etype, typename DType>
 class Plan<UnaryMapExp<OP, TA, DType, etype>, DType> {
