@@ -40,14 +40,14 @@ inline void AllocSpace(Tensor<gpu, dim, DType> *obj, bool pad) {
   size_t pitch;
   // common choice for cuda mem align unit is 32
   if (pad && obj->size(dim - 1) >= MSHADOW_MIN_PAD_RATIO * 32) {
-    //MSHADOW_CUDA_CALL(cudaMallocPitch(reinterpret_cast<void**>(&(obj->dptr_)), &pitch,
-    //                                  obj->size(dim - 1) * sizeof(DType),
-    //                                  obj->shape_.FlatTo2D()[0]));
+    MSHADOW_CUDA_CALL(hipMallocPitch(reinterpret_cast<void**>(&(obj->dptr_)), &pitch,
+                                      obj->size(dim - 1) * sizeof(DType),
+                                      obj->shape_.FlatTo2D()[0]));
     obj->stride_ = static_cast<index_t>(pitch / sizeof(DType));
   } else {
     obj->stride_ = obj->size(dim - 1);
-    //MSHADOW_CUDA_CALL(cudaMallocPitch(reinterpret_cast<void**>(&(obj->dptr_)), &pitch,
-    //                                  obj->shape_.Size() * sizeof(DType), 1));
+    MSHADOW_CUDA_CALL(hipMallocPitch(reinterpret_cast<void**>(&(obj->dptr_)), &pitch,
+                                      obj->shape_.Size() * sizeof(DType), 1));
   }
 }
 template<int dim, typename DType>
@@ -63,11 +63,11 @@ inline void Copy(Tensor<A, dim, DType> _dst,
   CHECK_EQ(_dst.shape_, _src.shape_) << "Copy:shape mismatch";
   Tensor<A, 2, DType> dst = _dst.FlatTo2D();
   Tensor<B, 2, DType> src = _src.FlatTo2D();
-  /*MSHADOW_CUDA_CALL(cudaMemcpy2DAsync(dst.dptr_, dst.stride_ * sizeof(DType),
+  MSHADOW_CUDA_CALL(hipMemcpy2DAsync(dst.dptr_, dst.stride_ * sizeof(DType),
                                       src.dptr_, src.stride_ * sizeof(DType),
                                       dst.size(1) * sizeof(DType),
                                       dst.size(0), kind,
-                                      Stream<gpu>::GetStream(stream)));*/
+                                      Stream<gpu>::GetStream(stream)));
   // use synchronize call behavior for zero stream
   if (stream == NULL) {
     MSHADOW_CUDA_CALL(hipStreamSynchronize(0));
