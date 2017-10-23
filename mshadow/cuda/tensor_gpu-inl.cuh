@@ -104,16 +104,20 @@ inline void MapPlan(expr::Plan<DstExp, DType> dst,
 
   if (num_block < kMaxGridNum) {
     dim3 dimGrid(num_block, 1, 1);
+    #if defined( __HIP_PLATFORM_NVCC__)
     hipLaunchKernelGGL(HIP_KERNEL_NAME(MapPlanKernel<Saver, kBaseThreadBits,
                   expr::Plan<DstExp, DType>,
-                  expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, xstride, dshape, plan);
+                  expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, xstride, dshape, plan); //TODO.Ambiguity error HCC
+    #endif
     MSHADOW_CUDA_POST_KERNEL_CHECK(MapPlanKernel);
   } else {
     int repeat = (num_block + kBaseGridNum-1) / kBaseGridNum;
     dim3 dimGrid(kBaseGridNum, 1 , 1);
+    #if defined(__HIP_PLATFORM_NVCC__)
     hipLaunchKernelGGL(HIP_KERNEL_NAME(MapPlanLargeKernel<Saver, kBaseThreadBits, kBaseGridNum,
                        expr::Plan<DstExp, DType>,
-                       expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, xstride, dshape, plan, repeat);
+                       expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, xstride, dshape, plan, repeat); //TODO.Ambiguity error for HCC
+    #endif
     MSHADOW_CUDA_POST_KERNEL_CHECK(MapPlanLargeKernel);
   }
 }
@@ -159,9 +163,11 @@ inline void MapReduceKeepLowest(expr::Plan<DstExp, DType> dst,
   dim3 dimBlock(kMemUnit, kMemUnit);
   dim3 dimGrid((eshape[1] + kMemUnit - 1) >> kMemUnitBits);
   CheckLaunchParam(dimGrid, dimBlock, "MapRedKeepLowestKernel");
+  #if defined(__HIP_PLATFORM_NVCC__)
   hipLaunchKernelGGL(HIP_KERNEL_NAME(MapRedKeepLowestKernel<Saver, Reducer, kMemUnitBits, DType,
                          expr::Plan<DstExp, DType>,
-                         expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, plan, scale, eshape);
+                         expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, plan, scale, eshape); //TODO.No Matching constructor for HCC
+  #endif
   MSHADOW_CUDA_POST_KERNEL_CHECK(MapRedKeepLowestKernel);
 }
 
@@ -200,9 +206,11 @@ inline void MapReduceKeepDim1(expr::Plan<DstExp, DType> dst,
   dim3 dimBlock(kBaseThreadNum);
   dim3 dimGrid (pshape[1]);
   CheckLaunchParam(dimGrid, dimBlock, "MapReduceKeepDim1");
+  #if defined(__HIP_PLATFORM_NVCC__)
   hipLaunchKernelGGL(HIP_KERNEL_NAME(MapReduceKeepDim1Kernel<Saver,Reducer,kBaseThreadBits, DType,
                           expr::Plan<DstExp, DType>,
-                          expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, plan, scale, pshape);
+                          expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, plan, scale, pshape); //TODO.Ambiguity error for HCC
+  #endif 
   MSHADOW_CUDA_POST_KERNEL_CHECK(MapReduceKeepDim1Kernel);
 }
 
@@ -223,7 +231,7 @@ inline void GetBatchedView(DType **dst, DType *src, int num, int stride,
   dim3 dimBlock(kBaseThreadNum);
   dim3 dimGrid(1);
   CheckLaunchParam(dimGrid, dimBlock, "GetBatchedView");
-  hipLaunchKernelGGL(HIP_KERNEL_NAME(GetBatchedViewKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream_, dst, src, num, stride); //TODO HIP
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(GetBatchedViewKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream_, dst, src, num, stride);
   MSHADOW_CUDA_POST_KERNEL_CHECK(GetBatchedViewKernel);
 }
 

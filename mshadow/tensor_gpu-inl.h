@@ -63,11 +63,13 @@ inline void Copy(Tensor<A, dim, DType> _dst,
   CHECK_EQ(_dst.shape_, _src.shape_) << "Copy:shape mismatch";
   Tensor<A, 2, DType> dst = _dst.FlatTo2D();
   Tensor<B, 2, DType> src = _src.FlatTo2D();
+  #if defined(__HIP_PLATFORM_NVCC__)
   MSHADOW_CUDA_CALL(hipMemcpy2DAsync(dst.dptr_, dst.stride_ * sizeof(DType),
                                       src.dptr_, src.stride_ * sizeof(DType),
                                       dst.size(1) * sizeof(DType),
                                       dst.size(0), kind,
-                                      Stream<gpu>::GetStream(stream)));
+                                      Stream<gpu>::GetStream(stream))); //TODO. Not supported for HCC.Linker error
+  #endif
   // use synchronize call behavior for zero stream
   if (stream == NULL) {
     MSHADOW_CUDA_CALL(hipStreamSynchronize(0));
