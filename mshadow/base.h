@@ -146,7 +146,7 @@ extern "C" {
 #if MSHADOW_USE_CUDA
   #include <hip/hip_runtime.h>
   #include <hip-wrappers.h> // dummy include file placed in /opt/rocm/include
-  #include <hipblas.h>
+  #include <rocblas.h>
   #include <hiprng.h>
 #endif
 

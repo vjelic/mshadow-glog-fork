@@ -26,16 +26,16 @@ endif
 ifeq ($(USE_CUDA), 0)
 	MSHADOW_CFLAGS += -DMSHADOW_USE_CUDA=0
 else
-#	MSHADOW_LDFLAGS += -L/opt/rocm/hcblas/lib -lhipblas -L/opt/rocm/hcrng/lib -lhiprng_hcc -L/opt/rocm/hip/lib -lhip_hcc -L/opt/rocm/hcfft/lib -lhipfft_hcc
-	MSHADOW_LDFLAGS += -L/opt/rocm/hip/lib -lhip_hcc
-	MSHADOW_LDFLAGS += -L/opt/rocm/hcblas/lib -lhipblas
-	MSHADOW_LDFLAGS += -L/opt/rocm/hcrng/lib -lhiprng_hcc
-	MSHADOW_LDFLAGS += -L/opt/rocm/hcfft/lib -lhcfft
-	ifneq (, $(findstring nvcc, $(HIP_PLATFORM)))
-		LDFLAGS += -lcudart -lcuda -lcufft -lcublas
-	endif
-
-	#MSHADOW_LDFLAGS += -lcuda -lcufft
+       ifneq (, $(findstring nvcc, $(HIP_PLATFORM)))
+#		LDFLAGS += -L/opt/rocm/rocblas/lib -lrocblas-hcc
+#		LDFLAGS += -L/opt/rocm/hcrng/lib -lhcrng
+#		LDFLAGS += -L/opt/rocm/hcfft/lib -lhcfft
+		LDFLAGS += -lcudart -lcufft -lcurand
+        else
+#		LDFLAGS += -L/opt/rocm/rocblas/lib  -lrocblas-hcc
+#		LDFLAGS += -L/opt/rocm/hcrng/lib   -lhiprng_hcc
+#		LDFLAGS += -L/opt/rocm/hcfft/lib   -lhipfft
+        endif
 endif
 ifneq ($(USE_CUDA_PATH), NONE)
 	MSHADOW_CFLAGS += -I$(USE_CUDA_PATH)/include

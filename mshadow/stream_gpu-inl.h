@@ -23,13 +23,13 @@ struct Stream<gpu> {
   };
   /*! \brief cudaStream */
   hipStream_t stream_;
-  /*! \brief hipblas handle */
-  hipblasHandle_t blas_handle_;
+  /*! \brief rocblas handle */
+  rocblas_handle blas_handle_;
   /*! \brief cudnn handle */
   #if MSHADOW_USE_CUDNN == 1
  miopenHandle_t dnn_handle_;
   #endif
-  /*! \brief hipblas handle ownership */
+  /*! \brief rocblas handle ownership */
   HandleState blas_handle_ownership_;
   /*! \brief cudnn handle ownership */
   HandleState dnn_handle_ownership_;
@@ -77,7 +77,7 @@ struct Stream<gpu> {
    * \brief return actual hipblasHandle
    * \param pointer to GPU stream
    */
-  inline static hipblasHandle_t GetBlasHandle(Stream<gpu> *stream) {
+  inline static rocblas_handle GetBlasHandle(Stream<gpu> *stream) {
     if (stream == NULL) {
       return 0;
     } else {
@@ -86,20 +86,20 @@ struct Stream<gpu> {
       return stream->blas_handle_;
     }
   }
-  /*! \brief Destory hipblas handle if own it */
+  /*! \brief Destory rocblas handle if own it */
   inline void DestoryBlasHandle() {
     if (blas_handle_ownership_ == OwnHandle) {
-      hipblasStatus_t err = hipblasDestroy(blas_handle_);
+      rocblas_status err = rocblas_destroy_handle(blas_handle_);
       blas_handle_ownership_ = NoHandle;
-      CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Destory hipblas handle failed";
+      CHECK_EQ(err, rocblas_status_success) << "Destory rocblas.handle failed";
     }
   }
   /*! \brief Destory original blas handle and create a new one */
   inline void CreateBlasHandle() {
     this->DestoryBlasHandle();
-    hipblasStatus_t err = hipblasCreate(&blas_handle_);
+    rocblas_status err = rocblas_create_handle(&blas_handle_);
     blas_handle_ownership_ = OwnHandle;
-    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Create hipblas handle failed";
+    CHECK_EQ(err, rocblas_status_success) << "Create rocblas.handle failed";
   }
 // #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
