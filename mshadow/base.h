@@ -92,7 +92,9 @@ typedef unsigned __int64 uint64_t;
  */
 #ifndef MSHADOW_USE_CUDA
   #define MSHADOW_USE_CUDA   1
-  #define CUDA_VERSION       8000
+#if defined(__HIP_PLATFORM_HCC__)  && !defined (__HIP_PLATFORM_NVCC__)
+  #define CUDA_VERSION   8000
+#endif
 #endif
 
 /*!
@@ -146,8 +148,8 @@ extern "C" {
 #if MSHADOW_USE_CUDA
   #include <hip/hip_runtime.h>
   #include <hip-wrappers.h> // dummy include file placed in /opt/rocm/include
-  #include <rocblas.h>
-  #include <hiprng.h>
+  #include <hipblas.h>
+  #include <hiprand.h>
 #endif
 
 #if MSHADOW_USE_CUDNN == 1

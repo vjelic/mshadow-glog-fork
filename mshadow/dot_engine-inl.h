@@ -415,13 +415,13 @@ struct BLASEngine<cpu, double> {
 // All CuBLAS goes to here, use legacy API: not threadsafe
 template<>
 struct BLASEngine<gpu, half::half_t> {
-  inline static rocblas_operation GetT(bool t) {
-    return t ? rocblas_operation_transpose : rocblas_operation_none;
+  inline static hipblasOperation_t GetT(bool t) {
+    return t ? HIPBLAS_OP_T : HIPBLAS_OP_N;
   }
   inline static void SetStream(Stream<gpu> *stream) {
-    rocblas_status err = rocblas_set_stream(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSetStream(Stream<gpu>::GetBlasHandle(stream),
                     Stream<gpu>::GetStream(stream));
-    CHECK_EQ(err, rocblas_status_success) << "rocblas set stream fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas set stream fail";
   }
   inline static void gemm(Stream<gpu> *stream,
                           bool transa, bool transb,
@@ -439,26 +439,25 @@ struct BLASEngine<gpu, half::half_t> {
     float alpha_f = float(alpha);  // NOLINT(*)
     float beta_f = float(beta);  // NOLINT(*)
   #if CUDA_VERSION >= 8000
-    rocblas_status err = rocblas_sgemmEx(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
                                        GetT(transa), GetT(transb), m, n, k, &alpha_f,
                                        A, HIP_R_16F, lda, B, HIP_R_16F,
                                        ldb, &beta_f, C, HIP_R_16F, ldc);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas SgemmEx fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas SgemmEx fail";
   #else
-    rocblas_status err = rocblas_sgemmEx(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
                                        GetT(transa), GetT(transb), m, n, k, &alpha_f,
                                        A, HIPBLAS_DATA_HALF, lda, B, HIPBLAS_DATA_HALF,
                                        ldb, &beta_f, C, HIPBLAS_DATA_HALF, ldc);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas SgemmEx fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas SgemmEx fail";
   #endif  // CUDA_VERSION >= 8000
   } else {
     // PASCAL
-/*    rocblas_status err = rocblas_hgemm(Stream<gpu>::GetBlasHandle(stream),
-                                     GetT(transa), GetT(transb), m, n, k, (rocblas_half*)&alpha.cuhalf_,
-                                     (rocblas_half*)&A->cuhalf_, lda, (rocblas_half*)&B->cuhalf_, ldb,
-                                     (rocblas_half*)&beta.cuhalf_, (rocblas_half*)&C->cuhalf_, ldc);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas Hgemm fail";
-   */ //TODO: Fix linker issue.
+    hipblasStatus_t err = hipblasHgemm(Stream<gpu>::GetBlasHandle(stream),
+                                     GetT(transa), GetT(transb), m, n, k, &alpha.cuhalf_,
+                                     &A->cuhalf_, lda, &B->cuhalf_, ldb,
+                                     &beta.cuhalf_, &C->cuhalf_, ldc);
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas Hgemm fail";
   }
 #else
     LOG(FATAL) << "Require CUDA version >= 7.5!";
@@ -513,13 +512,13 @@ struct BLASEngine<gpu, half::half_t> {
 
 template<>
 struct BLASEngine<gpu, float> {
-  inline static rocblas_operation GetT(bool t) {
-    return t ? rocblas_operation_transpose : rocblas_operation_none;
+  inline static hipblasOperation_t GetT(bool t) {
+    return t ? HIPBLAS_OP_T : HIPBLAS_OP_N;
   }
   inline static void SetStream(Stream<gpu> *stream) {
-    rocblas_status err = rocblas_set_stream(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSetStream(Stream<gpu>::GetBlasHandle(stream),
                     Stream<gpu>::GetStream(stream));
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: set stream fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: set stream fail";
   }
   inline static void gemm(Stream<gpu> *stream,
                           bool transa, bool transb,
@@ -527,10 +526,10 @@ struct BLASEngine<gpu, float> {
                           const float *A, int lda,
                           const float *B, int ldb, float beta,
                           float *C, int ldc) {
-    rocblas_status err = rocblas_sgemm(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSgemm(Stream<gpu>::GetBlasHandle(stream),
                 GetT(transa), GetT(transb), m, n, k, const_cast<float *>(&alpha),
                 const_cast<float *>(A), lda, const_cast<float *>(B), ldb,const_cast<float *>(&beta), C, ldc);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: Sgemm fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Sgemm fail";
   }
   inline static void batched_gemm(Stream<gpu> *stream,
                                   bool transa, bool transb,
@@ -551,12 +550,12 @@ struct BLASEngine<gpu, float> {
     GetBatchedView(workspace + batch_count,
                    const_cast<float*>(B), batch_count, k * n, stream);
     GetBatchedView(workspace + 2 * batch_count, C, batch_count, m * n, stream);
-    rocblas_status err = rocblas_sgemm_strided_batched(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSgemmBatched(Stream<gpu>::GetBlasHandle(stream),
                                             GetT(transa), GetT(transb), m, n, k, &alpha,
-                                            /*(const float**)workspace*/ (const float*)*workspace, lda, TEMP_BS_VAL,
-                                           /*(const float**)(workspace + batch_count)*/(const float*)*(workspace+batch_count), ldb,TEMP_BS_VAL,
-                                            (const float*)&beta, /*workspace + 2 * batch_count*/*(workspace + 2 * batch_count), ldc, TEMP_BS_VAL, batch_count);//TODO : Need to update orginal batch stride values instead of TEMP_BS_VAL
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: SgemmBatched fail";
+                                            (const float**)workspace, lda,
+                                            (const float**)(workspace + batch_count), ldb,
+                                            &beta, workspace + 2 * batch_count, ldc, batch_count);
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: SgemmBatched fail";
     if (alloc_workspace) {
       hipFree(workspace);
     }
@@ -573,9 +572,9 @@ struct BLASEngine<gpu, float> {
                           const float *A, int lda,
                           const float *X, int incX, float beta,
                           float *Y, int incY) {
-    rocblas_status err = rocblas_sgemv(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSgemv(Stream<gpu>::GetBlasHandle(stream),
                 GetT(trans), m, n,const_cast<float *>(&alpha), const_cast<float *>(A), lda, const_cast<float *>(X), incX,const_cast<float *>(&beta), Y, incY);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: Sgemv fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Sgemv fail";
   }
   inline static void batched_gemv(Stream<gpu> *stream,
                                   bool trans, int m, int n,
@@ -592,9 +591,9 @@ struct BLASEngine<gpu, float> {
                          int m, int n, float alpha,
                          const float *X, int incX,
                          const float *Y, int incY, float *A, int lda) {
-    rocblas_status err = rocblas_sger(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSger(Stream<gpu>::GetBlasHandle(stream),
                                     m, n, &alpha, X, incX, Y, incY, A, lda);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: Sger fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Sger fail";
   }
   inline static void batched_ger(Stream<gpu> *stream,
                          int m, int n, float alpha,
@@ -610,25 +609,25 @@ struct BLASEngine<gpu, float> {
                          const float* X, int incX,
                          const float* Y, int incY,
                          float *ret) {
-    rocblas_set_pointer_mode(Stream<gpu>::GetBlasHandle(stream),
-                         rocblas_pointer_mode_device);
-    rocblas_status err = rocblas_sdot(Stream<gpu>::GetBlasHandle(stream),
+    hipblasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
+                         HIPBLAS_POINTER_MODE_DEVICE);
+    hipblasStatus_t err = hipblasSdot(Stream<gpu>::GetBlasHandle(stream),
                                     n, X, incX, Y, incY, ret);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: Dot fail";
-    rocblas_set_pointer_mode(Stream<gpu>::GetBlasHandle(stream),
-                         rocblas_pointer_mode_host);
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Dot fail";
+    hipblasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
+                         HIPBLAS_POINTER_MODE_HOST);
   }
 };
 
 template<>
 struct BLASEngine<gpu, double> {
-  inline static rocblas_operation GetT(bool t) {
-    return t ? rocblas_operation_transpose : rocblas_operation_none;
+  inline static hipblasOperation_t GetT(bool t) {
+    return t ? HIPBLAS_OP_T : HIPBLAS_OP_N;
   }
   inline static void SetStream(Stream<gpu> *stream) {
-    rocblas_status err = rocblas_set_stream(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSetStream(Stream<gpu>::GetBlasHandle(stream),
                     Stream<gpu>::GetStream(stream));
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: set stream fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: set stream fail";
   }
   inline static void gemm(Stream<gpu> *stream,
                           bool transa, bool transb,
@@ -636,10 +635,10 @@ struct BLASEngine<gpu, double> {
                           const double *A, int lda,
                           const double *B, int ldb,
                           double beta, double *C, int ldc) {
-    rocblas_status err = rocblas_dgemm(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasDgemm(Stream<gpu>::GetBlasHandle(stream),
                 GetT(transa), GetT(transb), m, n, k, &alpha,
                 A, lda, B, ldb, &beta, C, ldc);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: Dgemm fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Dgemm fail";
   }
   inline static void batched_gemm(Stream<gpu> *stream,
                                   bool transa, bool transb,
@@ -660,12 +659,12 @@ struct BLASEngine<gpu, double> {
     GetBatchedView(workspace + batch_count,
                    const_cast<double*>(B), batch_count, k * n, stream);
     GetBatchedView(workspace + 2 * batch_count, C, batch_count, m * n, stream);
-    rocblas_status err = rocblas_dgemm_strided_batched(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasDgemmBatched(Stream<gpu>::GetBlasHandle(stream),
                                             GetT(transa), GetT(transb), m, n, k, &alpha,
-                                            /*(const double**)workspace*/(const double *)*workspace, lda,TEMP_BS_VAL,
-                                            /*(const double**)(workspace + batch_count)*/(const double*)*(workspace+batch_count),ldb,TEMP_BS_VAL,
-                                            (const double*)&beta,/* workspace + 2 * batch_count*/*(workspace + 2*batch_count), ldc, TEMP_BS_VAL, batch_count);//TODO : Need to use orginal batch stride values instead of TEMP_BS_VAL
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: DgemmBatched fail";
+                                            (const double**)workspace, lda,
+                                            (const double**)(workspace + batch_count), ldb,
+                                            &beta, workspace + 2 * batch_count, ldc, batch_count);
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: DgemmBatched fail";
     if (alloc_workspace) {
       hipFree(workspace);
     }
@@ -682,9 +681,9 @@ struct BLASEngine<gpu, double> {
                           const double *A, int lda,
                           const double *X, int incX,
                           double beta, double *Y, int incY) {
-    rocblas_status err = rocblas_dgemv(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasDgemv(Stream<gpu>::GetBlasHandle(stream),
                 GetT(trans), m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: Dgemv fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Dgemv fail";
   }
   inline static void batched_gemv(Stream<gpu> *stream,
                                   bool trans, int m, int n,
@@ -701,9 +700,9 @@ struct BLASEngine<gpu, double> {
                          int m, int n, double alpha,
                          const double *X, int incX,
                          const double *Y, int incY, double *A, int lda) {
-    rocblas_status err = rocblas_dger(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasDger(Stream<gpu>::GetBlasHandle(stream),
                                     m, n, &alpha, X, incX, Y, incY, A, lda);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: Dger fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Dger fail";
   }
   inline static void batched_ger(Stream<gpu> *stream,
                          int m, int n, double alpha,
@@ -719,13 +718,13 @@ struct BLASEngine<gpu, double> {
                          const double* X, int incX,
                          const double* Y, int incY,
                          double *ret) {
-    rocblas_set_pointer_mode(Stream<gpu>::GetBlasHandle(stream),
-                         rocblas_pointer_mode_device);
-    rocblas_status err = rocblas_ddot(Stream<gpu>::GetBlasHandle(stream),
+    hipblasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
+                         HIPBLAS_POINTER_MODE_DEVICE);
+    hipblasStatus_t err = hipblasDdot(Stream<gpu>::GetBlasHandle(stream),
                                     n, X, incX, Y, incY, ret);
-    CHECK_EQ(err, rocblas_status_success) << "rocblas: Dot fail";
-    rocblas_set_pointer_mode(Stream<gpu>::GetBlasHandle(stream),
-                         rocblas_pointer_mode_host);
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Dot fail";
+    hipblasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
+                         HIPBLAS_POINTER_MODE_HOST);
   }
 };
 #endif  // MSHADOW_USE_CUDA

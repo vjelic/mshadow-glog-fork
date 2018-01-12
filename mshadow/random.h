@@ -365,35 +365,35 @@ class Random<gpu, DType> {
    * \param seed random number seed
    */
   explicit Random(int seed) {
-    hiprngStatus_t status;
-    status = hiprngCreateGenerator(&gen_, HIPRNG_RNG_PSEUDO_DEFAULT);
-    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "Can not create CURAND Generator";
+    hiprandStatus_t status;
+    status = hiprandCreateGenerator(&gen_, HIPRAND_RNG_PSEUDO_DEFAULT);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "Can not create HIPRAND Generator";
     this->Seed(seed);
     buffer_.Resize(Shape1(kRandBufferSize));
   }
   ~Random(void) MSHADOW_THROW_EXCEPTION {
-    hiprngStatus_t status;
-    status = hiprngDestroyGenerator(gen_);
-    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "Destory CURAND Gen failed";
+    hiprandStatus_t status;
+    status = hiprandDestroyGenerator(gen_);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "Destory HIPRAND Gen failed";
   }
   /*!
    * \brief set the stream of computation
    * \param stream computation stream
    */
   inline void set_stream(Stream<gpu> *stream) {
-    hiprngStatus_t status;
-    status = hiprngSetStream(gen_, Stream<gpu>::GetStream(stream));
+    hiprandStatus_t status;
+    status = hiprandSetStream(gen_, Stream<gpu>::GetStream(stream));
 
-    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "set_stream CURAND failed";
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "set_stream HIPRAND failed";
   }
   /*!
    * \brief seed random number generator using this seed
    * \param seed seed of prng
    */
   inline void Seed(int seed) {
-    hiprngStatus_t status;
-    status = hiprngSetPseudoRandomGeneratorSeed(gen_, seed);
-    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "Set CURAND seed failed.";
+    hiprandStatus_t status;
+    status = hiprandSetPseudoRandomGeneratorSeed(gen_, seed);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "Set HIPRAND seed failed.";
   }
   /*!
    * \brief generate data from uniform [a,b)
@@ -449,35 +449,35 @@ class Random<gpu, DType> {
 
  private:
   inline void GenGaussian(float *dptr, size_t size, float mu, float sigma) {
-    hiprngStatus_t status;
-    status = hiprngGenerateNormal(gen_, dptr, size, mu, sigma);
-    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "CURAND Gen Normal float failed."
+    hiprandStatus_t status;
+    status = hiprandGenerateNormal(gen_, dptr, size, mu, sigma);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "HIPRAND Gen Normal float failed."
                                             << " size = " << size
                                             << ",mu = " << mu
                                             << ",sigma = " << sigma;
   }
   inline void GenGaussian(double *dptr, size_t size, double mu, double sigma) {
-    hiprngStatus_t status;
-    status = hiprngGenerateNormalDouble(gen_, dptr, size, mu, sigma);
-    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "CURAND Gen Normal double failed."
+    hiprandStatus_t status;
+    status = hiprandGenerateNormalDouble(gen_, dptr, size, mu, sigma);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "HIPRAND Gen Normal double failed."
                                             << " size = " << size
                                             << ",mu = " << mu
                                             << ",sigma = " << sigma;
   }
   inline void GenUniform(float *dptr, size_t size) {
-    hiprngStatus_t status;
-    status = hiprngGenerateUniform(gen_, dptr, size);
-    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "CURAND Gen Uniform float failed."
+    hiprandStatus_t status;
+    status = hiprandGenerateUniform(gen_, dptr, size);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "HIPRAND Gen Uniform float failed."
                                             << " size = " << size;
   }
   inline void GenUniform(double *dptr, size_t size) {
-    hiprngStatus_t status;
-    status = hiprngGenerateUniformDouble(gen_, dptr, size);
-    CHECK_EQ(status, HIPRNG_STATUS_SUCCESS) << "CURAND Gen Uniform double failed."
+    hiprandStatus_t status;
+    status = hiprandGenerateUniformDouble(gen_, dptr, size);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "HIPRAND Gen Uniform double failed."
                                             << " size = " << size;
   }
   /*! \brief random numbeer generator */
-  hiprngGenerator_t gen_;
+  hiprandGenerator_t gen_;
   /*! \brief templ buffer */
   TensorContainer<gpu, 1, DType> buffer_;
 };  // class Random<gpu, DType>
@@ -503,7 +503,7 @@ template<typename DType>
 template<int dim>
 inline void Random<gpu, DType>::SampleGaussian(
     Tensor<gpu, dim, DType> *dst, DType mu, DType sigma) {
-  // We need to check whether the shape size is even since CuRand supports only normal distribution
+  // We need to check whether the shape size is even since hiprand supports only normal distribution
   // generation of even number of elements.
   if (dst->CheckContiguous() && (dst->shape_.Size() % 2 == 0)) {
     this->GenGaussian(dst->dptr_, dst->shape_.Size(), mu, sigma);

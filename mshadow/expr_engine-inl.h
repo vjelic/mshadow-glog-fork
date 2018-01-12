@@ -130,8 +130,7 @@ class Plan<TernaryMapExp<OP, TA, TB, TC, DType, etype>, DType> {
 template<typename OP, typename TA, typename TB, int etype, typename DType>
 class Plan<BinaryMapExp<OP, TA, TB, DType, etype>, DType> {
  public:
-// explicit Plan(const Plan<TA, DType> &lhs, const Plan<TB, DType> &rhs)
-explicit  Plan(const Plan<TA, DType> &lhs, const Plan<TB, DType> &rhs)
+  explicit Plan(const Plan<TA, DType> &lhs, const Plan<TB, DType> &rhs)
       : lhs_(lhs), rhs_(rhs) {}
   MSHADOW_XINLINE DType Eval(index_t y, index_t x) const {
     return OP::Map(lhs_.Eval(y, x), rhs_.Eval(y, x));

@@ -27,14 +27,9 @@ ifeq ($(USE_CUDA), 0)
 	MSHADOW_CFLAGS += -DMSHADOW_USE_CUDA=0
 else
        ifneq (, $(findstring nvcc, $(HIP_PLATFORM)))
-#		LDFLAGS += -L/opt/rocm/rocblas/lib -lrocblas-hcc
-#		LDFLAGS += -L/opt/rocm/hcrng/lib -lhcrng
-#		LDFLAGS += -L/opt/rocm/hcfft/lib -lhcfft
 		LDFLAGS += -lcudart -lcufft -lcurand
         else
-#		LDFLAGS += -L/opt/rocm/rocblas/lib  -lrocblas-hcc
-#		LDFLAGS += -L/opt/rocm/hcrng/lib   -lhiprng_hcc
-#		LDFLAGS += -L/opt/rocm/hcfft/lib   -lhipfft
+		LDFLAGS +=
         endif
 endif
 ifneq ($(USE_CUDA_PATH), NONE)
