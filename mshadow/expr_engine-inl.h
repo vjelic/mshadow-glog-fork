@@ -85,8 +85,6 @@ class Plan<ScalarExp<DType>, DType> {
  public:
   Plan(DType scalar) : scalar_(scalar) {}
 
-  Plan(Plan<ScalarExp<DType>, DType> const& A)
-    :scalar_(A.scalar_) {}
   MSHADOW_XINLINE DType Eval(index_t y, index_t x) const {
     return scalar_;
   }
