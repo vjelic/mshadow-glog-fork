@@ -6,13 +6,13 @@
  */
 #ifndef MSHADOW_DOT_ENGINE_INL_H_
 #define MSHADOW_DOT_ENGINE_INL_H_
-
+#define TEMP_BS_VAL 1 //TODO :Need to update orginal value
 #include "./base.h"
 #include "./extension/implicit_gemm.h"
 
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 #include "./cuda/tensor_gpu-inl.cuh"
-#endif  // #ifdef __CUDACC__
+#endif  // #ifdef __HIPCC__
 
 namespace mshadow {
  /*!
@@ -33,14 +33,14 @@ inline void GetBatchedView(DType **dst, DType *src, int num, int stride,
     dst[i] = src + i * stride;
   }
 }
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 namespace cuda {};
 template<typename DType>
 inline void GetBatchedView(DType **dst, DType *src, int num, int stride,
                            Stream<gpu> *stream) {
   cuda::GetBatchedView(dst, src, num, stride, stream);
 }
-#endif  // #ifdef __CUDACC__
+#endif  // #ifdef __HIPCC__
 
 namespace expr {
 //---------------------------------------------------------------------
@@ -524,13 +524,13 @@ struct BLASEngine<gpu, float> {
                                   const float *A, int lda, const float *B, int ldb,
                                   float beta, float *C, int ldc, int batch_count,
                                   float **workspace) {
-#if defined(__CUDACC__) && CUDA_VERSION >= 4010 && CUDA_VERSION < 8000
+#if defined(__HIPCC__) && CUDA_VERSION >= 4010 && CUDA_VERSION < 8000
     // Cast DType* to DType** using workspace as a buffer
     bool alloc_workspace = false;
     if (workspace == NULL) {
       // Allocate the workspace if it's NULL.
       // TODO(sxjscience) Try to move the allocation inside Tensor, which is thread-safe.
-      cudaMalloc(reinterpret_cast<void**>(&workspace), 3 * batch_count * sizeof(float*));
+      hipMalloc(reinterpret_cast<void**>(&workspace), 3 * batch_count * sizeof(float*));
       alloc_workspace = true;
     }
     GetBatchedView(workspace, const_cast<float*>(A), batch_count, m * k, stream);
@@ -544,9 +544,9 @@ struct BLASEngine<gpu, float> {
                                             &beta, workspace + 2 * batch_count, ldc, batch_count);
     CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: SgemmBatched fail";
     if (alloc_workspace) {
-      cudaFree(workspace);
+      hipFree(workspace);
     }
-#elif defined(__CUDACC__) && CUDA_VERSION >= 8000
+#elif defined(__HIPCC__) && CUDA_VERSION >= 8000
     cublasStatus_t err = cublasSgemmStridedBatched(Stream<gpu>::GetBlasHandle(stream),
       GetT(transa), GetT(transb), m, n, k, &alpha,
       A, lda, m * k,
@@ -560,7 +560,7 @@ struct BLASEngine<gpu, float> {
            A + i * m * k, lda, B + i * k * n, ldb,
            beta, C + i * m * n, ldc);
     }
-#endif  // defined(__CUDACC__) && CUDA_VERSION >= 4010
+#endif  // defined(__HIPCC__) && CUDA_VERSION >= 4010
   }
   inline static void gemv(Stream<gpu> *stream,
                           bool trans, int m, int n, float alpha,
@@ -641,13 +641,13 @@ struct BLASEngine<gpu, double> {
                                   const double *A, int lda, const double *B, int ldb,
                                   double beta, double *C, int ldc, int batch_count,
                                   double **workspace) {
-#if defined(__CUDACC__) && CUDA_VERSION >= 4010 && CUDA_VERSION < 8000
+#if defined(__HIPCC__) && CUDA_VERSION >= 4010 && CUDA_VERSION < 8000
     // Cast DType* to DType** using workspace as a buffer
     bool alloc_workspace = false;
     if (workspace == NULL) {
       // Allocate the workspace if it's NULL.
       // TODO(sxjscience) Try to move the allocation inside Tensor, which is thread-safe.
-      cudaMalloc(reinterpret_cast<void**>(&workspace), 3 * batch_count * sizeof(double*));
+      hipMalloc(reinterpret_cast<void**>(&workspace), 3 * batch_count * sizeof(double*));
       alloc_workspace = true;
     }
     GetBatchedView(workspace, const_cast<double*>(A), batch_count, m * k, stream);
@@ -661,9 +661,9 @@ struct BLASEngine<gpu, double> {
                                             &beta, workspace + 2 * batch_count, ldc, batch_count);
     CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: DgemmBatched fail";
     if (alloc_workspace) {
-      cudaFree(workspace);
+      hipFree(workspace);
     }
-#elif defined(__CUDACC__) && CUDA_VERSION >= 8000
+#elif defined(__HIPCC__) && CUDA_VERSION >= 8000
     cublasStatus_t err = cublasDgemmStridedBatched(Stream<gpu>::GetBlasHandle(stream),
       GetT(transa), GetT(transb), m, n, k, &alpha,
       A, lda, m * k,
@@ -677,7 +677,7 @@ struct BLASEngine<gpu, double> {
            A + i * m * k, lda, B + i * k * n, ldb,
            beta, C + i * m * n, ldc);
     }
-#endif  // defined(__CUDACC__) && CUDA_VERSION >= 4010
+#endif  // defined(__HIPCC__) && CUDA_VERSION >= 4010
   }
   inline static void gemv(Stream<gpu> *stream,
                           bool trans, int m, int n, double alpha,

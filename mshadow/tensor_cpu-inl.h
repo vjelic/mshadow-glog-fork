@@ -55,16 +55,16 @@ inline void *AllocHost_(size_t size);
 template<typename xpu>
 inline void FreeHost_(void * dptr);
 
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 template<>
 inline void *AllocHost_<gpu>(size_t size) {
   void *dptr;
-  MSHADOW_CUDA_CALL(cudaMallocHost(&dptr, size, cudaHostAllocPortable));
+  MSHADOW_CUDA_CALL(hipHostMalloc(&dptr, size, hipHostMallocPortable));
   return dptr;
 }
 template<>
 inline void FreeHost_<gpu>(void *dptr) {
-  MSHADOW_CUDA_CALL(cudaFreeHost(dptr));
+  MSHADOW_CUDA_CALL(hipHostFree(dptr));
 }
 #endif
 

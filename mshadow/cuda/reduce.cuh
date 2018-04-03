@@ -1,3 +1,4 @@
+#include <hip/hip_runtime.h>
 /*!
  *  Copyright (c) 2014 by Contributors
  * \file reduce.cuh

@@ -34,7 +34,11 @@ endif
 ifeq ($(USE_CUDA), 0)
 	MSHADOW_CFLAGS += -DMSHADOW_USE_CUDA=0
 else
-	MSHADOW_LDFLAGS += -lcudart -lcublas -lcurand -lcusolver
+	ifneq (, $(findstring nvcc, $(HIP_PLATFORM)))
+		MSHADOW_LDFLAGS += -lcudart -lcufft -lcurand -lcusolver -lcublas
+        else
+		MSHADOW_LDFLAGS +=
+        endif
 endif
 ifneq ($(USE_CUDA_PATH), NONE)
 	MSHADOW_CFLAGS += -I$(USE_CUDA_PATH)/include

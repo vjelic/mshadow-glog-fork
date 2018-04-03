@@ -5,7 +5,6 @@
  */
 #ifndef MSHADOW_PACKET_INL_H_
 #define MSHADOW_PACKET_INL_H_
-
 #ifdef __APPLE__
 #include <stdlib.h>
 #else
@@ -25,7 +24,7 @@ enum PacketArch {
   kSSE2,
 };
 
-#if MSHADOW_USE_SSE
+#if MSHADOW_USE_SSE && !defined(__HIPCC__)
 #define MSHADOW_DEFAULT_PACKET  ::mshadow::packet::kSSE2
 #else
 #define MSHADOW_DEFAULT_PACKET  ::mshadow::packet::kPlain
@@ -51,7 +50,7 @@ struct AlignBytes {
 namespace mshadow {
 namespace packet {
 /*!
- * \brief analog to cudaMallocPitch, allocate a aligned space with num_line * lspace cells
+ * \brief analog to hipMallocPitch, allocate a aligned space with num_line * lspace cells
  * \param out_pitch output parameter, the actuall space allocated for each line
  * \param lspace number of cells required for each line
  * \param num_line number of lines to be allocated
@@ -199,7 +198,7 @@ struct Saver<sv::saveto, TFloat, Arch> {
 }  // namespace mshadow
 
 #include "packet/plain-inl.h"
-#if MSHADOW_USE_SSE && !defined(__CUDACC__)
+#if MSHADOW_USE_SSE && !defined(__HIPCC__)
 #include "packet/sse-inl.h"
 #endif
 

@@ -139,7 +139,7 @@ typedef unsigned __int64 uint64_t;
   #define MSHADOW_USE_NVML 0
 #endif
 // SSE is conflict with cudacc
-#ifdef __CUDACC__
+#ifdef __HIPCC__
   #undef MSHADOW_USE_SSE
   #define MSHADOW_USE_SSE 0
 #endif
@@ -156,7 +156,8 @@ extern "C" {
 #endif
 
 #if MSHADOW_USE_CUDA
-  #include <cuda.h>
+  #include <hip/hip_runtime.h>
+ // #include <hip-wrappers.h>
   #include <cublas_v2.h>
   #include <curand.h>
 #endif
@@ -184,7 +185,7 @@ extern "C" {
 #else
 #define MSHADOW_FORCE_INLINE inline __attribute__((always_inline))
 #endif
-#ifdef __CUDACC__
+#ifdef __HIPCC__
   #define MSHADOW_XINLINE MSHADOW_FORCE_INLINE __device__ __host__
 #else
   #define MSHADOW_XINLINE MSHADOW_FORCE_INLINE
@@ -237,12 +238,12 @@ extern "C" {
  */
 #define MSHADOW_CUDA_CALL(func)                                    \
   {                                                                \
-    cudaError_t e = (func);                                        \
-    if (e == cudaErrorCudartUnloading) {                           \
-      throw dmlc::Error(cudaGetErrorString(e));                    \
+    hipError_t e = (func);                                        \
+    if (e == hipErrorDeinitialized) {                             \
+      throw dmlc::Error(hipGetErrorString(e));                    \
     }                                                              \
-    CHECK(e == cudaSuccess)                                        \
-        << "CUDA: " << cudaGetErrorString(e);                      \
+ /*   CHECK(e == hipSuccess)                                        \
+        << "CUDA: " << hipGetErrorString(e);     */                 \
   }
 
 /*!
@@ -715,11 +716,11 @@ struct maximum {
   template<typename DType>
   MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src) { // NOLINT(*)
     using namespace std;
-#ifdef __CUDACC__
+#ifdef __HIPCC__
     dst = ::max(dst, src);
 #else
     dst = max(dst, src);
-#endif  // __CUDACC__
+#endif  // __HIPCC__
   }
   /*! \brief do reduction into dst */
   template<typename DType>
@@ -756,11 +757,11 @@ struct minimum {
   template<typename DType>
   MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src) { // NOLINT(*)
     using namespace std;
-#ifdef __CUDACC__
+#ifdef __HIPCC__
     dst = ::min(dst, src);
 #else
     dst = min(dst, src);
-#endif  // __CUDACC__
+#endif  // __HIPCC__
   }
   /*! \brief do reduction into dst */
   template<typename DType>

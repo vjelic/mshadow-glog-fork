@@ -516,7 +516,7 @@ class Random<gpu, DType> {
 };  // class Random<gpu, DType>
 #endif  // MSHADOW_USE_CUDA
 
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 // implementations that depends on cuda kernels
 template<typename DType>
 template<int dim>
@@ -565,6 +565,6 @@ Random<gpu, DType>::uniform(Shape<dim> shape) {
   this->GenUniform(buffer_.dptr_, buffer_.size(0));
   return expr::reshape(buffer_, shape);
 }
-#endif  // __CUDACC__
+#endif  // __HIPCC__
 }  // namespace mshadow
 #endif  // MSHADOW_RANDOM_H_
