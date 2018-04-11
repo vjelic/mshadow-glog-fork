@@ -15,7 +15,7 @@
   //#if defined(__CUDA_ARCH__)
   #if __HIP_DEVICE_COMPILE__
     /*! \brief __half2float_warp */
-    __host__ __device__ float __half2float_warp(const volatile __half& h) { /* NOLINT(*) */
+    __host__ __device__ static float __half2float_warp(const volatile __half& h) { /* NOLINT(*) */
       __half val;
   #if defined(__HIP_PLATFORM_NVCC__)  && !defined (__HIP_PLATFORM_HCC__)
 	#if CUDA_VERSION >= 9000
