@@ -752,11 +752,11 @@ inline void IndexFill(Tensor<gpu, 2, DType> dst,
   CheckLaunchParam(dimGrid, dimBlock, "IndexFill");
   hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
 
-  hipLaunchKernelGGL(HIP_KERNEL_NAME(IndexFillKernel<kMemUnitBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream,expr::MakePlan(dst),
+  /*hipLaunchKernelGGL(HIP_KERNEL_NAME(IndexFillKernel<kMemUnitBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream,expr::MakePlan(dst),
       expr::MakePlan(index),
       expr::MakePlan(src),
       static_cast<const index_t>(src.size(0)),
-      static_cast<const int>(src.size(1)));
+      static_cast<const int>(src.size(1)));*/
   MSHADOW_CUDA_POST_KERNEL_CHECK(IndexFillKernel);
 }
 

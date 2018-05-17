@@ -26,7 +26,7 @@
 #include <functional>
 #include <sstream>
 #include <string>
-
+#include <hip-wrappers.h> // dummy include file placed in /opt/rocm/include
 #ifdef _MSC_VER
 //! \cond Doxygen_Suppress
 typedef signed char int8_t;
@@ -107,7 +107,7 @@ typedef unsigned __int64 uint64_t;
  * \brief use CUSOLVER support
  */
 #ifndef MSHADOW_USE_CUSOLVER
-  #define MSHADOW_USE_CUSOLVER MSHADOW_USE_CUDA
+//  #define MSHADOW_USE_CUSOLVER MSHADOW_USE_CUDA
 #endif
 
 /*!
@@ -157,9 +157,9 @@ extern "C" {
 
 #if MSHADOW_USE_CUDA
   #include <hip/hip_runtime.h>
- // #include <hip-wrappers.h>
-  #include <cublas_v2.h>
-  #include <curand.h>
+  #include <hip-wrappers.h>
+  #include <hipblas.h>
+  #include <hiprand.h>
 #endif
 
 #if MSHADOW_USE_CUDNN == 1
@@ -304,8 +304,8 @@ struct DataType<float> {
   static const int kFlag = kFloat32;
   static const int kLanes = 1;
 #if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_32F;
+#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_32F;
 #endif
 #if MSHADOW_USE_CUDNN
   static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_FLOAT;
@@ -318,8 +318,8 @@ struct DataType<double> {
   static const int kFlag = kFloat64;
   static const int kLanes = 1;
 #if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_64F;
+#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_64F;
 #endif
 #if MSHADOW_USE_CUDNN
   static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_DOUBLE;
@@ -332,8 +332,8 @@ struct DataType<half::half_t> {
   static const int kFlag = kFloat16;
   static const int kLanes = 1;
 #if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_16F;
+#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_16F;
 #endif
 #if MSHADOW_USE_CUDNN
   static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_HALF;
@@ -351,8 +351,8 @@ struct DataType<uint8_t> {
   static const int kFlag = kUint8;
   static const int kLanes = 1;
 #if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_8U;
+#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_8U;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   // no uint8 in cudnn for now
@@ -366,8 +366,8 @@ struct DataType<int8_t> {
   static const int kFlag = kInt8;
   static const int kLanes = 1;
 #if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_8I;
+#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_8I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT8;
@@ -380,8 +380,8 @@ struct DataType<int32_t> {
   static const int kFlag = kInt32;
   static const int kLanes = 1;
 #if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_32I;
+#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_32I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT32;
