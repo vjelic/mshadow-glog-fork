@@ -411,7 +411,7 @@ struct BLASEngine<cpu, double> {
 };
 #endif  // MSHADOW_USE_CBLAS || MSHADOW_USE_MKL || MSHADOW_STAND_ALONE
 // CuBLAS redirect code
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 // All CuBLAS goes to here, use legacy API: not threadsafe
 template<>
 struct BLASEngine<gpu, half::half_t> {
@@ -429,7 +429,7 @@ struct BLASEngine<gpu, half::half_t> {
                           const half::half_t *A, int lda,
                           const half::half_t *B, int ldb, half::half_t beta,
                           half::half_t *C, int ldc) {
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 7050
+#if defined (__HIP_PLATFORM_HCC__) || (CUDA_VERSION >= 7050)
   if (
 #if MSHADOW_USE_PASCAL == 1
       false ||
@@ -438,7 +438,7 @@ struct BLASEngine<gpu, half::half_t> {
     // Not PASCAL
     float alpha_f = float(alpha);  // NOLINT(*)
     float beta_f = float(beta);  // NOLINT(*)
-  #if CUDA_VERSION >= 8000
+  #if defined (__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 8000
     hipblasStatus_t err = hipblasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
                                        GetT(transa), GetT(transb), m, n, k, &alpha_f,
                                        A, HIP_R_16F, lda, B, HIP_R_16F,
@@ -450,7 +450,7 @@ struct BLASEngine<gpu, half::half_t> {
                                        A, HIPBLAS_DATA_HALF, lda, B, HIPBLAS_DATA_HALF,
                                        ldb, &beta_f, C, HIPBLAS_DATA_HALF, ldc);
     CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas SgemmEx fail";
-  #endif  // CUDA_VERSION >= 8000
+  #endif
   } else {
     // PASCAL
     hipblasStatus_t err = hipblasHgemm(Stream<gpu>::GetBlasHandle(stream),
@@ -459,7 +459,7 @@ struct BLASEngine<gpu, half::half_t> {
                                      &beta.cuhalf_, &C->cuhalf_, ldc);
     CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas Hgemm fail";
   }
-#else
+#elif definde (__HIP_PLATFORM_NVCC__) && CUDA_VERSION <= 7050
     LOG(FATAL) << "Require CUDA version >= 7.5!";
 #endif  // defined(CUDA_VERSION) && CUDA_VERSION >= 7050
   }
@@ -537,8 +537,7 @@ struct BLASEngine<gpu, float> {
                                   const float *A, int lda, const float *B, int ldb,
                                   float beta, float *C, int ldc, int batch_count,
                                   float **workspace) {
-#if defined(__HIPCC__) && CUDA_VERSION >= 4010
-    // Cast DType* to DType** using workspace as a buffer
+#if defined (__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 4010 // Cast DType* to DType** using workspace as a buffer
     bool alloc_workspace = false;
     if (workspace == NULL) {
       // Allocate the workspace if it's NULL.
@@ -559,13 +558,14 @@ struct BLASEngine<gpu, float> {
     if (alloc_workspace) {
       hipFree(workspace);
     }
-#else
+#endif
+#if defined (__HIP_PLATFORM_NVCC__) && CUDA_VERSION < 4010
     for (int i = 0; i < batch_count; ++i) {
       gemm(stream, transa, transb, m, n, k, alpha,
            A + i * m * k, lda, B + i * k * n, ldb,
            beta, C + i * m * n, ldc);
     }
-#endif  // defined(__HIPCC__) && CUDA_VERSION >= 4010
+#endif
   }
   inline static void gemv(Stream<gpu> *stream,
                           bool trans, int m, int n, float alpha,
@@ -646,7 +646,7 @@ struct BLASEngine<gpu, double> {
                                   const double *A, int lda, const double *B, int ldb,
                                   double beta, double *C, int ldc, int batch_count,
                                   double **workspace) {
-#if defined(__HIPCC__) && CUDA_VERSION >= 4010
+#if defined (__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 4010
     // Cast DType* to DType** using workspace as a buffer
     bool alloc_workspace = false;
     if (workspace == NULL) {
@@ -668,13 +668,14 @@ struct BLASEngine<gpu, double> {
     if (alloc_workspace) {
       hipFree(workspace);
     }
-#else
+#endif
+#if defined (__HIP_PLATFORM_NVCC__) && CUDA_VERSION < 4010
     for (int i = 0; i < batch_count; ++i) {
       gemm(stream, transa, transb, m, n, k, alpha,
            A + i * m * k, lda, B + i * k * n, ldb,
            beta, C + i * m * n, ldc);
     }
-#endif  // defined(__HIPCC__) && CUDA_VERSION >= 4010
+#endif
   }
   inline static void gemv(Stream<gpu> *stream,
                           bool trans, int m, int n, double alpha,
@@ -727,7 +728,7 @@ struct BLASEngine<gpu, double> {
                          HIPBLAS_POINTER_MODE_HOST);
   }
 };
-#endif  // MSHADOW_USE_CUDA
+#endif  // MSHADOW_USE_GPU
 // helper function to decide which shape we are in
 inline Shape<2> GetShape(const Shape<2> &shape, bool transpose) {
   return transpose ? Shape2(shape[1], shape[0]) : shape;

@@ -11,7 +11,7 @@
 #include "./logging.h"
 
 namespace mshadow {
-#if MSHADOW_USE_CUDA == 1
+#if MSHADOW_USE_GPU == 1
 // Stream alocation
 // actual implementation of GPU stream in CUDA
 template<>
@@ -26,8 +26,11 @@ struct Stream<gpu> {
   /*! \brief hipblas handle */
   hipblasHandle_t blas_handle_;
   /*! \brief cudnn handle */
-  #if MSHADOW_USE_CUDNN == 1
+  #if MSHADOW_USE_MIOPEN == 1
  miopenHandle_t dnn_handle_;
+  #endif
+  #if MSHADOW_USE_CUDNN == 1
+  cudnnHandle_t dnn_handle_;
   #endif
   /*! \brief hipblas handle ownership */
   HandleState blas_handle_ownership_;
@@ -86,8 +89,8 @@ struct Stream<gpu> {
       return stream->blas_handle_;
     }
   }
-  /*! \brief Destory hipblas handle if own it */
-  inline void DestoryBlasHandle() {
+  /*! \brief Destroy hipblas handle if own it */
+  inline void DestroyBlasHandle() {
     if (blas_handle_ownership_ == OwnHandle) {
       hipblasStatus_t err = hipblasDestroy(blas_handle_);
       blas_handle_ownership_ = NoHandle;
@@ -96,14 +99,14 @@ struct Stream<gpu> {
   }
   /*! \brief Destory original blas handle and create a new one */
   inline void CreateBlasHandle() {
-    this->DestoryBlasHandle();
+    this->DestroyBlasHandle();
     hipblasStatus_t err = hipblasCreate(&blas_handle_);
     blas_handle_ownership_ = OwnHandle;
     CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Create hipblas handle failed";
   }
 // #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
-  inline static miopenHandle_t GetDnnHandle(Stream<gpu> *stream) {
+  inline static cudnnHandle_t GetDnnHandle(Stream<gpu> *stream) {
     if (stream == NULL) {
       return 0;
     } else {
@@ -112,24 +115,48 @@ struct Stream<gpu> {
     }
   }
 #endif
+#if MSHADOW_USE_MIOPEN == 1
+inline static miopenHandle_t GetDnnHandle(Stream<gpu> *stream) {
+    if (stream == NULL) {
+      return 0;
+    } else {
+      CHECK_NE(stream->dnn_handle_ownership_, NoHandle) << "No handle exist in source stream";
+      return stream->dnn_handle_;
+    }
+}
+#endif
+
   inline void DestroyDnnHandle() {
-// #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
-#if MSHADOW_USE_CUDNN == 1
+#if MSHADOW_USE_MIOPEN == 1
     if (dnn_handle_ownership_ == OwnHandle) {
       miopenStatus_t  err = miopenDestroy(dnn_handle_);
       CHECK_EQ(err, miopenStatusSuccess) << (err);
     }
 #endif
+#if MSHADOW_USE_CUDNN == 1
+if (dnn_handle_ownership_ == OwnHandle) {
+      cudnnStatus_t err = cudnnDestroy(dnn_handle_);
+      CHECK_EQ(err, CUDNN_STATUS_SUCCESS) << cudnnGetErrorString(err);
+    }
+#endif
   }
   inline void CreateDnnHandle() {
-// #if MSHADOW_USE_CUDNN == 1 && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
     this->DestroyDnnHandle();
-    miopenStatus_t  err = miopenCreate(&dnn_handle_);
-    CHECK_EQ(err, miopenStatusSuccess) << (err);
-    err = miopenSetStream(dnn_handle_, stream_);
-    CHECK_EQ(err, miopenStatusSuccess) << (err);
+    cudnnStatus_t err = cudnnCreate(&dnn_handle_);
+    CHECK_EQ(err, CUDNN_STATUS_SUCCESS) << cudnnGetErrorString(err);
+    err = cudnnSetStream(dnn_handle_, stream_);
+    CHECK_EQ(err, CUDNN_STATUS_SUCCESS) << cudnnGetErrorString(err);
     this->dnn_handle_ownership_ = OwnHandle;
+#endif
+#if MSHADOW_USE_MIOPEN == 1
+     this->DestroyDnnHandle();
+     miopenStatus_t  err = miopenCreate(&dnn_handle_);
+     CHECK_EQ(err, miopenStatusSuccess) << (err);
+     err = miopenSetStream(dnn_handle_, stream_);
+     CHECK_EQ(err, miopenStatusSuccess) << (err);
+     this->dnn_handle_ownership_ = OwnHandle;
+ 
 #endif
   }
 };
@@ -154,7 +181,7 @@ inline Stream<gpu> *NewStream<gpu>(bool create_blas_handle,
 template<>
 inline void DeleteStream<gpu>(Stream<gpu> *stream) {
   MSHADOW_CUDA_CALL(hipStreamDestroy(stream->stream_));
-  stream->DestoryBlasHandle();
+  stream->DestroyBlasHandle();
   stream->DestroyDnnHandle();
   delete stream;
 }

@@ -1,4 +1,4 @@
-if(NOT USE_CUDA)
+if(NOT USE_GPU)
   return()
 endif()
 

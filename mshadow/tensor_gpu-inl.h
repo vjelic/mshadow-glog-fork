@@ -11,14 +11,14 @@
 #include "./tensor.h"
 
 namespace mshadow {
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 template<>
 inline void InitTensorEngine<gpu>(int dev_id) {
   hipDeviceProp_t prop;
   int device_id = 0;
   int device_count = 0;
   hipGetDeviceCount(&device_count);
-  CHECK_GT(device_count, 0) << "Cannot find CUDA device. Please check CUDA-Configuration";
+  CHECK_GT(device_count, 0) << "Cannot find GPU device. Please check GPU-Configuration";
   if (dev_id < 0) {
     device_id = 0;
   } else {
@@ -91,7 +91,7 @@ inline void Copy(Tensor<gpu, dim, DType> dst,
                  Stream<gpu> *stream) {
   Copy(dst, src, hipMemcpyHostToDevice, stream);
 }
-#endif  // MSHADOW_USE_CUDA
+#endif  // MSHADOW_USE_GPU
 }  // namespace mshadow
 
 // the following part is included only if compiler is nvcc

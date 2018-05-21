@@ -9,7 +9,7 @@
 #define MSHADOW_CUDA_TENSOR_GPU_INL_CUH_
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
-#if CUDA_VERSION >= 7000
+#if defined  (__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 7000
 #include <thrust/system/cuda/execution_policy.h>
 #endif
 #include "../tensor.h"
@@ -664,7 +664,7 @@ inline void SortByKey(Tensor<gpu, 1, KDType> keys, Tensor<gpu, 1, VDType> values
                       bool is_ascend) {
   CHECK_EQ(keys.CheckContiguous(), true);
   CHECK_EQ(values.CheckContiguous(), true);
-#if CUDA_VERSION >= 7000
+#if defined (__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 7000
   hipStream_t stream = Stream<gpu>::GetStream(keys.stream_);
   thrust::device_ptr<KDType> key_iter = thrust::device_pointer_cast(keys.dptr_);
   thrust::device_ptr<VDType> value_iter = thrust::device_pointer_cast(values.dptr_);

@@ -9,7 +9,8 @@
 #define MSHADOW_HALF_H_
 #include "./base.h"
 
-#if (MSHADOW_USE_CUDA && CUDA_VERSION >= 7050)
+#if MSHADOW_USE_GPU 
+#if defined (__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 7050
   #define MSHADOW_CUDA_HALF 1
   #include <hip/hip_fp16.h>
   //#if defined(__CUDA_ARCH__)
@@ -32,7 +33,7 @@
 #else
   #define MSHADOW_CUDA_HALF 0
 #endif
-
+#endif
 /*! \brief namespace for mshadow */
 namespace mshadow {
 /* \brief name space for host/device portable half-precision floats */

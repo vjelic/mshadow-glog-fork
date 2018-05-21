@@ -23,8 +23,8 @@ else
 	MSHADOW_CFLAGS += -DMSHADOW_USE_SSE=0
 endif
 
-ifeq ($(USE_CUDA), 0)
-	MSHADOW_CFLAGS += -DMSHADOW_USE_CUDA=0
+ifeq ($(USE_GPU), 0)
+	MSHADOW_CFLAGS += -DMSHADOW_USE_GPU=0
 else
        ifneq (, $(findstring nvcc, $(HIP_PLATFORM)))
 		LDFLAGS += -lcudart -lcufft -lcurand
