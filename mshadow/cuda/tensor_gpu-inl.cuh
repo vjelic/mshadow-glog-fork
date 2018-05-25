@@ -81,7 +81,7 @@ template<typename Saver, int block_dim_bits,
 __global__ void MapPlanKernel(DstPlan dst, index_t xstride,
                               Shape<2> dshape, const Plan plan) {
   MapPlanProc<Saver, DstPlan, Plan, block_dim_bits>
-      (dst, xstride, dshape, plan, hipBlockIdx_x);
+      (dst, xstride, dshape, plan, blockIdx.x);
 }
 template<typename Saver, int block_dim_bits, int grid_size,
          typename DstPlan, typename Plan>
@@ -89,7 +89,7 @@ __global__ void MapPlanLargeKernel(DstPlan dst, index_t xstride,
                                    Shape<2> dshape, const Plan plan, int repeat) {
   for (int i = 0; i < repeat; ++i) {
   MapPlanProc<Saver, DstPlan, Plan, block_dim_bits>
-      (dst, xstride, dshape, plan, hipBlockIdx_x + i * grid_size);
+      (dst, xstride, dshape, plan, blockIdx.x + i * grid_size);
   }
 }
 
@@ -125,28 +125,28 @@ __launch_bounds__(kMemUnit*kMemUnit, 1)
 MapRedKeepLowestKernel(DstPlan dst, Plan plan,
                        DType scale, Shape<2> eshape) {
   const unsigned warp_size = 1 << warp_bits;
-  const unsigned x = (hipBlockIdx_x << warp_bits) + hipThreadIdx_x;
+  const unsigned x = (blockIdx.x << warp_bits) + threadIdx.x;
   // to avoid bank conflict
   __shared__ DType s_res[warp_size][warp_size + 1];
-  // note: reverse store [y][x], so that we can reduce over hipThreadIdx_x, use warp optimization
-  if (hipThreadIdx_y < eshape[0] && x < eshape[1]) {
-    s_res[hipThreadIdx_x][hipThreadIdx_y] = plan.Eval(hipThreadIdx_y, x);
+  // note: reverse store [y][x], so that we can reduce over threadIdx.x, use warp optimization
+  if (threadIdx.y < eshape[0] && x < eshape[1]) {
+    s_res[threadIdx.x][threadIdx.y] = plan.Eval(threadIdx.y, x);
   }
   for (unsigned y = warp_size; y < eshape[0]; y += warp_size) {
-    if (hipThreadIdx_y + y < eshape[0] && x < eshape[1]) {
-      Reducer::Reduce(s_res[hipThreadIdx_x][hipThreadIdx_y], plan.Eval(hipThreadIdx_y + y, x));
+    if (threadIdx.y + y < eshape[0] && x < eshape[1]) {
+      Reducer::Reduce(s_res[threadIdx.x][threadIdx.y], plan.Eval(threadIdx.y + y, x));
     }
   }
   __syncthreads();
   if (eshape[0] >= warp_size) {
-    Reduce1D<Reducer, warp_bits>(s_res[hipThreadIdx_y]);
+    Reduce1D<Reducer, warp_bits>(s_res[threadIdx.y]);
   } else {
-    Reduce1DNotAlign<Reducer, warp_bits>(s_res[hipThreadIdx_y], eshape[0]);
+    Reduce1DNotAlign<Reducer, warp_bits>(s_res[threadIdx.y], eshape[0]);
   }
   __syncthreads();
 
-  if (hipThreadIdx_y == 0 && x < eshape[1]) {
-    Saver::Save(dst.REval(0, x),  DType(s_res[hipThreadIdx_x][0] * scale));
+  if (threadIdx.y == 0 && x < eshape[1]) {
+    Saver::Save(dst.REval(0, x),  DType(s_res[threadIdx.x][0] * scale));
   }
 }
 
@@ -170,13 +170,13 @@ template<typename Saver, typename Reducer, int block_dim_bits,
 __global__ void MapReduceKeepDim1Kernel(DstPlan dst, Plan plan, DType scale, Shape<4> pshape) {
   const int block_size = 1 << block_dim_bits;
   __shared__ DType s_rec[block_size];
-  const int c = hipBlockIdx_x + hipBlockIdx_y * hipGridDim_x;
+  const int c = blockIdx.x + blockIdx.y * gridDim.x;
   const index_t tot = pshape[3] * pshape[2] * pshape[0];
 
   if (c < pshape[1]) {
     DType res; Reducer::SetInitValue(res);
     for (index_t i_offset = 0; i_offset < tot; i_offset += block_size) {
-      index_t i = i_offset + hipThreadIdx_x;
+      index_t i = i_offset + threadIdx.x;
       if (i< tot) {
         const index_t x = i % pshape[3];
         i /= pshape[3];
@@ -185,10 +185,10 @@ __global__ void MapReduceKeepDim1Kernel(DstPlan dst, Plan plan, DType scale, Sha
         Reducer::Reduce(res, plan.Eval((n * pshape[1] + c) * pshape[2] + y, x));
       }
     }
-    s_rec[hipThreadIdx_x] = res;
+    s_rec[threadIdx.x] = res;
     __syncthreads();
     Reduce1D<Reducer, block_dim_bits>(s_rec);
-    if (hipThreadIdx_x == 0) {
+    if (threadIdx.x == 0) {
       Saver::Save(dst.REval(0, c), DType(s_rec[0] * scale));
     }
   }
@@ -214,7 +214,7 @@ inline void MapReduceKeepDim1(expr::Plan<DstExp, DType> dst,
 template<int x_bits, typename DType>
 __global__ void GetBatchedViewKernel(DType **dst, DType *src, int num, int stride) {
   const int x_size = 1 << x_bits;
-  const int start = hipThreadIdx_x;
+  const int start = threadIdx.x;
   // Copy the addresses of src to dst every stride steps
   for (int i = start; i < num; i += x_size) {
     dst[i] = src + i * stride;
@@ -235,12 +235,12 @@ inline void GetBatchedView(DType **dst, DType *src, int num, int stride,
 template<int x_bits, typename DType, typename DstPlan, typename SrcPlan1, typename SrcPlan2>
 __global__ void SoftmaxGradKernel(DstPlan dst, SrcPlan1 src, SrcPlan2 label, index_t xmax) {
   const unsigned x_size = 1 << x_bits;
-  const int y = hipBlockIdx_x;
+  const int y = blockIdx.x;
   const int k = static_cast<int>(label.Eval(0, y));
 
   // calculate normalizer, with writeback
   for (unsigned x = 0; x < xmax; x += x_size) {
-    const unsigned xindex = x + hipThreadIdx_x;
+    const unsigned xindex = x + threadIdx.x;
     if (xindex < xmax) {
       if (xindex == k) {
         dst.REval(y, xindex) = src.Eval(y, xindex) - 1.0f;
@@ -277,12 +277,12 @@ template<int x_bits, typename DType, typename DstPlan, typename SrcPlan1, typena
 __global__ void SoftmaxGradKernel(DstPlan dst, SrcPlan1 src, SrcPlan2 label, index_t xmax,
                                   DType ignore_label) {
   const unsigned x_size = 1 << x_bits;
-  const int y = hipBlockIdx_x;
+  const int y = blockIdx.x;
   const int k = static_cast<int>(label.Eval(0, y));
 
   // calculate normalizer, with writeback
   for (unsigned x = 0; x < xmax; x += x_size) {
-    const unsigned xindex = x + hipThreadIdx_x;
+    const unsigned xindex = x + threadIdx.x;
     if (xindex < xmax) {
       if (static_cast<int>(ignore_label) == k) {
         dst.REval(y, xindex) = 0.0f;
@@ -326,37 +326,37 @@ __global__ void SmoothSoftmaxGradKernel(DstPlan dst, SrcPlan1 src, SrcPlan2 labe
 template<int x_bits, typename DType,  typename DstPlan, typename SrcPlan>
 __global__ void SoftmaxKernel(DstPlan dst, SrcPlan src, index_t xmax) {
   const unsigned x_size = 1 << x_bits;
-  const int y = hipBlockIdx_x;
+  const int y = blockIdx.x;
   __shared__ DType s_rec[x_size];
   // step 1: get max
-  if (hipThreadIdx_x < xmax) {
-    s_rec[hipThreadIdx_x] = src.Eval(y, hipThreadIdx_x);
+  if (threadIdx.x < xmax) {
+    s_rec[threadIdx.x] = src.Eval(y, threadIdx.x);
   }
   for (unsigned x = x_size; x < xmax; x += x_size) {
-    if (x + hipThreadIdx_x < xmax) {
-      DType a = src.Eval(y, x + hipThreadIdx_x);
-      s_rec[hipThreadIdx_x] = max(a, s_rec[hipThreadIdx_x]);
+    if (x + threadIdx.x < xmax) {
+      DType a = src.Eval(y, x + threadIdx.x);
+      s_rec[threadIdx.x] = max(a, s_rec[threadIdx.x]);
     }
   }
   __syncthreads();
-  if (hipThreadIdx_x >= xmax) {
-    s_rec[hipThreadIdx_x] = s_rec[0];
+  if (threadIdx.x >= xmax) {
+    s_rec[threadIdx.x] = s_rec[0];
   }
   __syncthreads();
   Reduce1D<red::maximum, x_bits>(s_rec);
   __syncthreads();
   DType smax = s_rec[0];
   __syncthreads();
-  s_rec[hipThreadIdx_x] = 0.0f;
+  s_rec[threadIdx.x] = 0.0f;
   __syncthreads();
 
   // calculate normalizer, with writeback
   for (unsigned x = 0; x < xmax; x += x_size) {
-    if (x + hipThreadIdx_x < xmax) {
-      DType p = expf(src.Eval(y, x + hipThreadIdx_x) - smax);
-      s_rec[hipThreadIdx_x] += p;
+    if (x + threadIdx.x < xmax) {
+      DType p = expf(src.Eval(y, x + threadIdx.x) - smax);
+      s_rec[threadIdx.x] += p;
       // write back first, will fetch later
-      dst.REval(y, x + hipThreadIdx_x) = p;
+      dst.REval(y, x + threadIdx.x) = p;
     }
   }
   // calculate normalizer
@@ -366,8 +366,8 @@ __global__ void SoftmaxKernel(DstPlan dst, SrcPlan src, index_t xmax) {
   DType ssum = s_rec[0];
 
   for (unsigned x = 0; x < xmax; x += x_size) {
-    if (x + hipThreadIdx_x < xmax) {
-      dst.REval(y, x + hipThreadIdx_x) /= ssum;
+    if (x + threadIdx.x < xmax) {
+      dst.REval(y, x + threadIdx.x) /= ssum;
     }
   }
 }
@@ -469,8 +469,8 @@ __global__ void Softmax3DGradKernel(Tensor<gpu, 3, DType> dst,
   const index_t xmax = dst.size(1);
   const index_t nmax = dst.size(2);
   const unsigned n_size = 1 << n_bits;
-  const int y = hipBlockIdx_x;
-  const int n = hipThreadIdx_x;
+  const int y = blockIdx.x;
+  const int n = threadIdx.x;
 
   for (index_t n_index = n; n_index < nmax; n_index += n_size) {
     const int k = static_cast<int>(label[y][n_index]);
@@ -492,8 +492,8 @@ __global__ void Softmax3DGradKernel(Tensor<gpu, 3, DType> dst,
   const index_t xmax = dst.size(1);
   const index_t nmax = dst.size(2);
   const unsigned n_size = 1 << n_bits;
-  const int y = hipBlockIdx_x;
-  const int n = hipThreadIdx_x;
+  const int y = blockIdx.x;
+  const int n = threadIdx.x;
   for (index_t n_index = n; n_index < nmax; n_index += n_size) {
     int k = static_cast<int>(label[y][n_index]);
     if (k == static_cast<int>(ignore_label)) {
@@ -518,8 +518,8 @@ __global__ void Softmax3DKernel(Tensor<gpu, 3, DType> dst,
   const index_t xmax = dst.size(1);
   const index_t nmax = dst.size(2);
   const unsigned n_size = 1 << n_bits;
-  const int y = hipBlockIdx_x;
-  const int n = hipThreadIdx_x;
+  const int y = blockIdx.x;
+  const int n = threadIdx.x;
 
   for (index_t n_index = n; n_index < nmax; n_index += n_size) {
     DType smax = src[y][0][n_index];
@@ -586,10 +586,10 @@ __global__ void AddTakeGradKernel(DstPlan dst,
                                   SrcPlan1 index, SrcPlan2 src,
                                   index_t ymax, index_t xmax, const int K) {
   const unsigned x_size = 1 << x_bits;
-  const int xindex = hipBlockIdx_x * x_size + hipThreadIdx_x;
+  const int xindex = blockIdx.x * x_size + threadIdx.x;
   __shared__ int ptr;
   for (unsigned y = 0; y < ymax; ++y) {
-    if (hipThreadIdx_x == 0) {
+    if (threadIdx.x == 0) {
       ptr = index.Eval(0, y);
       if (ptr <= 0) ptr = 0;
       else if (ptr >= K) ptr = K - 1;
@@ -620,12 +620,12 @@ __global__ void AddTakeGradLargeBatchKernel(DType* dst,
   // Also, all warp will loop for SZ times to increase the throughput.
 
   const int warp_size = 1 << warp_bits;
-  int idx = hipBlockIdx_x * hipBlockDim_y + hipThreadIdx_y;
+  int idx = blockIdx.x * blockDim.y + threadIdx.y;
 
   if (idx < ymax
     && (idx == 0 || sorted[idx] != sorted[idx - 1])) {
     do {
-      const int start_feature = hipThreadIdx_x + hipBlockIdx_y * hipBlockDim_x * SZ;
+      const int start_feature = threadIdx.x + blockIdx.y * blockDim.x * SZ;
       const int dst_row = static_cast<int>(sorted[idx]) * xmax;
       const int src_row = static_cast<int>(index[idx]) * xmax;
       float grad_out[SZ];
@@ -719,8 +719,8 @@ __global__ void IndexFillKernel(DstPlan dst,
                                 const SrcPlan src,
                                 const int ymax,
                                 const int xmax) {
-  int bid = hipBlockIdx_y * hipBlockDim_x + hipBlockIdx_x;
-  int tid = bid * hipBlockDim_x * hipBlockDim_y + hipThreadIdx_y * hipBlockDim_x + hipThreadIdx_x;
+  int bid = blockIdx.y * blockDim.x + blockIdx.x;
+  int tid = bid * blockDim.x * blockDim.y + threadIdx.y * blockDim.x + threadIdx.x;
   if (tid < ymax * xmax) {
     int i = tid / xmax;
     int j = tid % xmax;
