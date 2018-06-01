@@ -367,7 +367,7 @@ class Random<cpu, DType> {
 };  // class Random<cpu, DType>
 
 // only allow GPU PRNG when cuda is enabled
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 /*! \brief GPU random number generator */
 template<typename DType>
 class Random<gpu, DType> {
@@ -514,7 +514,7 @@ class Random<gpu, DType> {
   /*! \brief templ buffer */
   TensorContainer<gpu, 1, DType> buffer_;
 };  // class Random<gpu, DType>
-#endif  // MSHADOW_USE_CUDA
+#endif  // MSHADOW_USE_GPU
 
 #ifdef __HIPCC__
 // implementations that depends on cuda kernels

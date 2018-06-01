@@ -68,7 +68,7 @@ typedef unsigned __int64 uint64_t;
 #if MSHADOW_STAND_ALONE
   #define MSHADOW_USE_CBLAS 0
   #define MSHADOW_USE_MKL   0
-  #define MSHADOW_USE_CUDA  0
+  #define MSHADOW_USE_GPU  0
 #endif
 
 /*!
@@ -92,8 +92,8 @@ typedef unsigned __int64 uint64_t;
  * \brief use CUDA support, must ensure that the cuda include path is correct,
  * or directly compile using nvcc
  */
-#ifndef MSHADOW_USE_CUDA
-  #define MSHADOW_USE_CUDA   1
+#ifndef MSHADOW_USE_GPU
+  #define MSHADOW_USE_GPU   1
 #endif
 
 /*!
@@ -107,7 +107,7 @@ typedef unsigned __int64 uint64_t;
  * \brief use CUSOLVER support
  */
 #ifndef MSHADOW_USE_CUSOLVER
-//  #define MSHADOW_USE_CUSOLVER MSHADOW_USE_CUDA
+//  #define MSHADOW_USE_CUSOLVER MSHADOW_USE_GPU
 #endif
 
 /*!
@@ -155,7 +155,7 @@ extern "C" {
   #include <mkl_vsl_functions.h>
 #endif
 
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
   #include <hip/hip_runtime.h>
   #include <hip-wrappers.h>
   #include <hipblas.h>
@@ -303,7 +303,7 @@ template<>
 struct DataType<float> {
   static const int kFlag = kFloat32;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 #if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_32F;
 #endif
@@ -317,7 +317,7 @@ template<>
 struct DataType<double> {
   static const int kFlag = kFloat64;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 #if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_64F;
 #endif
@@ -331,7 +331,7 @@ template<>
 struct DataType<half::half_t> {
   static const int kFlag = kFloat16;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 #if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_16F;
 #endif
@@ -350,7 +350,7 @@ template<>
 struct DataType<uint8_t> {
   static const int kFlag = kUint8;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 #if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_8U;
 #endif
@@ -365,7 +365,7 @@ template<>
 struct DataType<int8_t> {
   static const int kFlag = kInt8;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 #if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_8I;
 #endif
@@ -379,7 +379,7 @@ template<>
 struct DataType<int32_t> {
   static const int kFlag = kInt32;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 #if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_32I;
 #endif
@@ -419,7 +419,7 @@ struct LayoutType;
 template<>
 struct LayoutType<kNCHW> {
   static const index_t kNdim = 4;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
   static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
 #else
   static const int kCudnnFlag = -1;
@@ -429,7 +429,7 @@ struct LayoutType<kNCHW> {
 template<>
 struct LayoutType<kNHWC> {
   static const index_t kNdim = 4;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
   static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC;
 #else
   static const int kCudnnFlag = -1;
@@ -442,7 +442,7 @@ const int default_layout = kNCHW;
 template<>
 struct LayoutType<kNCDHW> {
   static const index_t kNdim = 5;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
   static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
 #else
   static const int kCudnnFlag = -1;
@@ -452,7 +452,7 @@ struct LayoutType<kNCDHW> {
 template<>
 struct LayoutType<kNDHWC> {
   static const index_t kNdim = 5;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
   static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC;
 #else
   static const int kCudnnFlag = -1;

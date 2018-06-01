@@ -11,7 +11,7 @@
 #include "./tensor.h"
 
 namespace mshadow {
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 template<>
 inline void InitTensorEngine<gpu>(int dev_id) {
   hipDeviceProp_t prop;
@@ -93,7 +93,7 @@ inline void Copy(Tensor<gpu, dim, DType> dst,
                  Stream<gpu> *stream) {
   Copy(dst, src, hipMemcpyHostToDevice, stream);
 }
-#endif  // MSHADOW_USE_CUDA
+#endif  // MSHADOW_USE_GPU
 }  // namespace mshadow
 
 // the following part is included only if compiler is nvcc

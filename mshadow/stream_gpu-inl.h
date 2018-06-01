@@ -12,7 +12,7 @@
 #include "./logging.h"
 
 namespace mshadow {
-#if MSHADOW_USE_CUDA == 1
+#if MSHADOW_USE_GPU == 1
 // Stream alocation
 // actual implementation of GPU stream in CUDA
 template<>

@@ -31,8 +31,8 @@ else
 	MSHADOW_CFLAGS += -DMSHADOW_USE_SSE=0
 endif
 
-ifeq ($(USE_CUDA), 0)
-	MSHADOW_CFLAGS += -DMSHADOW_USE_CUDA=0
+ifeq ($(USE_GPU), 0)
+	MSHADOW_CFLAGS += -DMSHADOW_USE_GPU=0
 else
 	ifneq (, $(findstring nvcc, $(HIP_PLATFORM)))
 		MSHADOW_LDFLAGS += -lcudart -lcufft -lcurand -lcusolver -lcublas
@@ -40,9 +40,9 @@ else
 		MSHADOW_LDFLAGS +=
         endif
 endif
-ifneq ($(USE_CUDA_PATH), NONE)
-	MSHADOW_CFLAGS += -I$(USE_CUDA_PATH)/include
-	MSHADOW_LDFLAGS += -L$(USE_CUDA_PATH)/lib64 -L$(USE_CUDA_PATH)/lib
+ifneq ($(USE_GPU_PATH), NONE)
+	MSHADOW_CFLAGS += -I$(USE_GPU_PATH)/include
+	MSHADOW_LDFLAGS += -L$(USE_GPU_PATH)/lib64 -L$(USE_GPU_PATH)/lib
 endif
 
 ifeq ($(USE_BLAS), mkl)
