@@ -17,7 +17,7 @@ USE_GPU = 0
 
 # add the path to CUDA libary to link and compile flag
 # if you have already add them to enviroment variable, leave it as NONE
-USE_GPU_PATH = NONE
+USE_CUDA_PATH = NONE
 
 #
 # choose the version of blas you want to use

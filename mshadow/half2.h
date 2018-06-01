@@ -8,7 +8,7 @@
 #ifndef MSHADOW_HALF2_H_
 #define MSHADOW_HALF2_H_
 
-#if (defined(__HIPCC__) && __CUDA_ARCH__ >= 530 && MSHADOW_USE_GPU && CUDA_VERSION >= 7050)
+#if (defined(__HIPCC__) && __CUDA_ARCH__ >= 530 && MSHADOW_USE_GPU && (defined(__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 7050))
   #define MSHADOW_CUDA_HALF2 1
   #include <hip/hip_fp16.h>
 #else

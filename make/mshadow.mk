@@ -40,9 +40,9 @@ else
 		MSHADOW_LDFLAGS +=
         endif
 endif
-ifneq ($(USE_GPU_PATH), NONE)
-	MSHADOW_CFLAGS += -I$(USE_GPU_PATH)/include
-	MSHADOW_LDFLAGS += -L$(USE_GPU_PATH)/lib64 -L$(USE_GPU_PATH)/lib
+ifneq ($(USE_CUDA_PATH), NONE)
+	MSHADOW_CFLAGS += -I$(USE_CUDA_PATH)/include
+	MSHADOW_LDFLAGS += -L$(USE_CUDA_PATH)/lib64 -L$(USE_CUDA_PATH)/lib
 endif
 
 ifeq ($(USE_BLAS), mkl)
