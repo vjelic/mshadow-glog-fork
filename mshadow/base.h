@@ -163,7 +163,13 @@ extern "C" {
 #endif
 
 #if MSHADOW_USE_CUDNN == 1
-  #include <cudnn.h>
+  //#include <cudnn.h>
+  #include <miopen/miopen.h>
+ //Temporarily defined to enable the cudnn path for debugging
+  #define CUDNN_MAJOR      6
+  #define CUDNN_MINOR      0
+  #define CUDNN_PATCHLEVEL 21
+  #define CUDNN_VERSION    (CUDNN_MAJOR * 1000 + CUDNN_MINOR * 100 + CUDNN_PATCHLEVEL)
 #endif
 
 #if MSHADOW_USE_CUSOLVER == 1
@@ -308,7 +314,8 @@ struct DataType<float> {
   static const hipDataType kCudaFlag = HIP_R_32F;
 #endif
 #if MSHADOW_USE_CUDNN
-  static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_FLOAT;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
+  //static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_FLOAT;
   typedef float ScaleType;
 #endif
 #endif
@@ -322,7 +329,8 @@ struct DataType<double> {
   static const hipDataType kCudaFlag = HIP_R_64F;
 #endif
 #if MSHADOW_USE_CUDNN
-  static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_DOUBLE;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
+  //static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_DOUBLE; //TODO : MIOpen doesn't support double
   typedef double ScaleType;
 #endif
 #endif
@@ -336,7 +344,8 @@ struct DataType<half::half_t> {
   static const hipDataType kCudaFlag = HIP_R_16F;
 #endif
 #if MSHADOW_USE_CUDNN
-  static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_HALF;
+  static const miopenDataType_t kCudnnFlag = miopenHalf;
+  //static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_HALF;
   typedef float ScaleType;
 #endif
 #endif
@@ -356,7 +365,8 @@ struct DataType<uint8_t> {
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   // no uint8 in cudnn for now
-  static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT8;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
+  //static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT8; //TODO : MIOpen doesn't support int8
   typedef uint8_t ScaleType;
 #endif
 #endif
@@ -370,7 +380,8 @@ struct DataType<int8_t> {
   static const hipDataType kCudaFlag = HIP_R_8I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
-  static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT8;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
+  //static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT8; //TODO : MIOpen doesn't support int8
   typedef int8_t ScaleType;
 #endif
 #endif
@@ -384,7 +395,8 @@ struct DataType<int32_t> {
   static const hipDataType kCudaFlag = HIP_R_32I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
-  static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT32;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
+  //static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT32; //TODO : MIOpen doesn't support int32
   typedef int32_t ScaleType;
 #endif
 #endif
@@ -420,7 +432,7 @@ template<>
 struct LayoutType<kNCHW> {
   static const index_t kNdim = 4;
 #if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
@@ -430,7 +442,7 @@ template<>
 struct LayoutType<kNHWC> {
   static const index_t kNdim = 4;
 #if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC;
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
@@ -443,7 +455,7 @@ template<>
 struct LayoutType<kNCDHW> {
   static const index_t kNdim = 5;
 #if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
@@ -453,7 +465,7 @@ template<>
 struct LayoutType<kNDHWC> {
   static const index_t kNdim = 5;
 #if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC;
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
