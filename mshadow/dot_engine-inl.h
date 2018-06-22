@@ -430,11 +430,11 @@ struct BLASEngine<gpu, half::half_t> {
                           const half::half_t *B, int ldb, half::half_t beta,
                           half::half_t *C, int ldc) {
 //#if defined(CUDA_VERSION) && CUDA_VERSION >= 7050
-#if defined(__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 7050
+#if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 7050)
   // Always use pseudo-fp16: fp32 compute with fp16 I/O.
   float alpha_f = float(alpha);  // NOLINT(*)
   float beta_f = float(beta);  // NOLINT(*)
-  #if defined(__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 8000
+  #if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 8000)
     hipblasStatus_t err = hipblasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
                                        GetT(transa), GetT(transb), m, n, k, &alpha_f,
                                        A, HIP_R_16F, lda, B, HIP_R_16F,
@@ -525,7 +525,7 @@ struct BLASEngine<gpu, float> {
                                   const float *A, int lda, const float *B, int ldb,
                                   float beta, float *C, int ldc, int batch_count,
                                   float **workspace) {
-#if defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || (CUDA_VERSION >= 4010 && CUDA_VERSION < 8000))
+#if defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 4010 && CUDA_VERSION < 8000))
     // Cast DType* to DType** using workspace as a buffer
     bool alloc_workspace = false;
     if (workspace == NULL) {
@@ -547,7 +547,7 @@ struct BLASEngine<gpu, float> {
     if (alloc_workspace) {
       hipFree(workspace);
     }
-#elif defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 8000)
+#elif defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 8000))
     hipblasStatus_t err = hipblasSgemmStridedBatched(Stream<gpu>::GetBlasHandle(stream),
       GetT(transa), GetT(transb), m, n, k, &alpha,
       A, lda, m * k,
@@ -642,7 +642,7 @@ struct BLASEngine<gpu, double> {
                                   const double *A, int lda, const double *B, int ldb,
                                   double beta, double *C, int ldc, int batch_count,
                                   double **workspace) {
-#if defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || (CUDA_VERSION >= 4010 && CUDA_VERSION < 8000))
+#if defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 4010 && CUDA_VERSION < 8000))
     // Cast DType* to DType** using workspace as a buffer
     bool alloc_workspace = false;
     if (workspace == NULL) {
@@ -664,7 +664,7 @@ struct BLASEngine<gpu, double> {
     if (alloc_workspace) {
       hipFree(workspace);
     }
-#elif defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 8000)
+#elif defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 8000))
     hipblasStatus_t err = hipblasDgemmStridedBatched(Stream<gpu>::GetBlasHandle(stream),
       GetT(transa), GetT(transb), m, n, k, &alpha,
       A, lda, m * k,

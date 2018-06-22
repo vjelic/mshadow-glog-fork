@@ -24,7 +24,7 @@ enum PacketArch {
   kSSE2,
 };
 
-#if MSHADOW_USE_SSE && !defined(__HIPCC__)
+#if MSHADOW_USE_SSE
 #define MSHADOW_DEFAULT_PACKET  ::mshadow::packet::kSSE2
 #else
 #define MSHADOW_DEFAULT_PACKET  ::mshadow::packet::kPlain

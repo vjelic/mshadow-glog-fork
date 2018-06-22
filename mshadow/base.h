@@ -310,7 +310,7 @@ struct DataType<float> {
   static const int kFlag = kFloat32;
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
-#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_32F;
 #endif
 #if MSHADOW_USE_CUDNN
@@ -325,7 +325,7 @@ struct DataType<double> {
   static const int kFlag = kFloat64;
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
-#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_64F;
 #endif
 #if MSHADOW_USE_CUDNN
@@ -340,7 +340,7 @@ struct DataType<half::half_t> {
   static const int kFlag = kFloat16;
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
-#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_16F;
 #endif
 #if MSHADOW_USE_CUDNN
@@ -360,7 +360,7 @@ struct DataType<uint8_t> {
   static const int kFlag = kUint8;
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
-#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_8U;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
@@ -376,7 +376,7 @@ struct DataType<int8_t> {
   static const int kFlag = kInt8;
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
-#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_8I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
@@ -391,7 +391,7 @@ struct DataType<int32_t> {
   static const int kFlag = kInt32;
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
-#if (CUDA_VERSION >= 8000) || defined(__HIP_PLATFORM_HCC__)
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
   static const hipDataType kCudaFlag = HIP_R_32I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)

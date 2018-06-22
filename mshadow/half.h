@@ -9,7 +9,7 @@
 #define MSHADOW_HALF_H_
 #include "./base.h"
 
-#if defined MSHADOW_USE_GPU && (defined(__HIP_PLATFORM_HCC__) || ( CUDA_VERSION >= 7050))
+#if defined MSHADOW_USE_GPU && (defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && ( CUDA_VERSION >= 7050)))
   #define MSHADOW_CUDA_HALF 1
   #include <hip/hip_fp16.h>
   //#if defined(__CUDA_ARCH__)

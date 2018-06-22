@@ -9,7 +9,7 @@
 #define MSHADOW_CUDA_TENSOR_GPU_INL_CUH_
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
-#if defined(__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 7000
+#if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 7000)
 #include <thrust/system/cuda/execution_policy.h>
 #endif
 #include "../tensor.h"
@@ -752,11 +752,11 @@ inline void IndexFill(Tensor<gpu, 2, DType> dst,
   CheckLaunchParam(dimGrid, dimBlock, "IndexFill");
   hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
 
-  /*hipLaunchKernelGGL(HIP_KERNEL_NAME(IndexFillKernel<kMemUnitBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream,expr::MakePlan(dst),
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(IndexFillKernel<kMemUnitBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream,expr::MakePlan(dst),
       expr::MakePlan(index),
       expr::MakePlan(src),
-      static_cast<const index_t>(src.size(0)),
-      static_cast<const int>(src.size(1)));*/
+      static_cast<const int>(src.size(0)),
+      static_cast<const int>(src.size(1)));
   MSHADOW_CUDA_POST_KERNEL_CHECK(IndexFillKernel);
 }
 
@@ -765,7 +765,7 @@ inline void SortByKey(Tensor<gpu, 1, KDType> keys, Tensor<gpu, 1, VDType> values
                       bool is_ascend) {
   CHECK_EQ(keys.CheckContiguous(), true);
   CHECK_EQ(values.CheckContiguous(), true);
-#if defined(__HIP_PLATFORM_HCC__) || CUDA_VERSION >= 7000
+#if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 7000)
   hipStream_t stream = Stream<gpu>::GetStream(keys.stream_);
   thrust::device_ptr<KDType> key_iter = thrust::device_pointer_cast(keys.dptr_);
   thrust::device_ptr<VDType> value_iter = thrust::device_pointer_cast(values.dptr_);
