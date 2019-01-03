@@ -32,7 +32,7 @@ struct Stream<gpu> {
   #endif
   /*! \brief cudnn handle */
   #if MSHADOW_USE_CUDNN == 1
-  miopenHandle_t dnn_handle_;
+  hipdnnHandle_t dnn_handle_;
   #endif
   /*! \brief hipblas handle ownership */
   HandleState blas_handle_ownership_;
@@ -144,7 +144,7 @@ struct Stream<gpu> {
   }
 // #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
-  inline static miopenHandle_t GetDnnHandle(Stream<gpu> *stream) {
+  inline static hipdnnHandle_t GetDnnHandle(Stream<gpu> *stream) {
     if (stream == NULL) {
       return 0;
     } else {
@@ -157,10 +157,9 @@ struct Stream<gpu> {
 // #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
     if (dnn_handle_ownership_ == OwnHandle) {
-      miopenStatus_t err = miopenDestroy(dnn_handle_);
+      hipdnnStatus_t err = hipdnnDestroy(dnn_handle_);
       this->dnn_handle_ownership_ = NoHandle;
-      //CHECK_EQ(err, miopenStatusSuccess) << cudnnGetErrorString(err);
-      CHECK_EQ(err, miopenStatusSuccess) << (err);
+      CHECK_EQ(err, HIPDNN_STATUS_SUCCESS) << hipdnnGetErrorString(err);
     }
 #endif
   }
@@ -168,14 +167,12 @@ struct Stream<gpu> {
 // #if MSHADOW_USE_CUDNN == 1 && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
     this->DestroyDnnHandle();
-    miopenStatus_t err = miopenCreate(&dnn_handle_);
-    //CHECK_EQ(err, miopenStatusSuccess) << cudnnGetErrorString(err);
-    CHECK_EQ(err, miopenStatusSuccess) << (err);
+    hipdnnStatus_t err = hipdnnCreate(&dnn_handle_);
+    CHECK_EQ(err, HIPDNN_STATUS_SUCCESS) << hipdnnGetErrorString(err);
     // At this point, we have the resource which may need to be freed
     this->dnn_handle_ownership_ = OwnHandle;
-    err = miopenSetStream(dnn_handle_, stream_);
-    //CHECK_EQ(err, miopenStatusSuccess) << cudnnGetErrorString(err);
-    CHECK_EQ(err, miopenStatusSuccess) << (err);
+    err = hipdnnSetStream(dnn_handle_, stream_);
+    CHECK_EQ(err, HIPDNN_STATUS_SUCCESS) << hipdnnGetErrorString(err);
 #endif
   }
 };
