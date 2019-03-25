@@ -1,3 +1,4 @@
+#include "hip/hip_runtime.h"
 /*!
  *  Copyright (c) 2014 by Contributors
  * \file tensor_gpu-inl.cuh
@@ -8,16 +9,16 @@
 #define MSHADOW_CUDA_TENSOR_GPU_INL_CUH_
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
-#if CUDA_VERSION >= 7000
+#if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 7000)
 #include <thrust/system/cuda/execution_policy.h>
 #endif
 #include "../tensor.h"
 #include "./reduce.cuh"
 #define MSHADOW_CUDA_POST_KERNEL_CHECK(x) \
-  /* Code block avoids redefinition of cudaError_t err */ \
+  /* Code block avoids redefinition of hipError_t err */ \
   do { \
-    cudaError err = cudaPeekAtLastError(); \
-    CHECK_EQ(err, cudaSuccess) << "Name: " << #x << " ErrStr:" << cudaGetErrorString(err); \
+    hipError_t err = hipPeekAtLastError(); \
+    CHECK_EQ(err, hipSuccess) << "Name: " << #x << " ErrStr:" << hipGetErrorString(err); \
   } while (0)
 namespace mshadow {
 namespace cuda {
@@ -96,25 +97,23 @@ template<typename Saver, typename DstExp, typename E, typename DType>
 inline void MapPlan(expr::Plan<DstExp, DType> dst,
                     const expr::Plan<E, DType> &plan,
                     Shape<2> dshape,
-                    cudaStream_t stream) {
+                    hipStream_t stream) {
   const index_t xstride = GetAlignStride(dshape[1]);
   const int num_block = (dshape[0] * xstride + kBaseThreadNum-1) / kBaseThreadNum;
   dim3 dimBlock(kBaseThreadNum, 1, 1);
 
   if (num_block < kMaxGridNum) {
     dim3 dimGrid(num_block, 1, 1);
-    MapPlanKernel<Saver, kBaseThreadBits,
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(MapPlanKernel<Saver, kBaseThreadBits,
                   expr::Plan<DstExp, DType>,
-                  expr::Plan<E, DType> >
-        <<<dimGrid, dimBlock, 0, stream>>>(dst, xstride, dshape, plan);
+                  expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, xstride, dshape, plan);
     MSHADOW_CUDA_POST_KERNEL_CHECK(MapPlanKernel);
   } else {
     int repeat = (num_block + kBaseGridNum-1) / kBaseGridNum;
     dim3 dimGrid(kBaseGridNum, 1 , 1);
-    MapPlanLargeKernel<Saver, kBaseThreadBits, kBaseGridNum,
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(MapPlanLargeKernel<Saver, kBaseThreadBits, kBaseGridNum,
                        expr::Plan<DstExp, DType>,
-                       expr::Plan<E, DType> >
-        <<<dimGrid, dimBlock, 0, stream>>>(dst, xstride, dshape, plan, repeat);
+                       expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, xstride, dshape, plan, repeat);
     MSHADOW_CUDA_POST_KERNEL_CHECK(MapPlanLargeKernel);
   }
 }
@@ -156,14 +155,13 @@ template<typename Saver, typename Reducer,
 inline void MapReduceKeepLowest(expr::Plan<DstExp, DType> dst,
                                 const expr::Plan<E, DType> &plan,
                                 DType scale, Shape<2> eshape,
-                                cudaStream_t stream) {
+                                hipStream_t stream) {
   dim3 dimBlock(kMemUnit, kMemUnit);
   dim3 dimGrid((eshape[1] + kMemUnit - 1) >> kMemUnitBits);
   CheckLaunchParam(dimGrid, dimBlock, "MapRedKeepLowestKernel");
-  MapRedKeepLowestKernel<Saver, Reducer, kMemUnitBits, DType,
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(MapRedKeepLowestKernel<Saver, Reducer, kMemUnitBits, DType,
                          expr::Plan<DstExp, DType>,
-                         expr::Plan<E, DType> >
-      <<<dimGrid, dimBlock, 0, stream>>>(dst, plan, scale, eshape);
+                         expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, plan, scale, eshape);
   MSHADOW_CUDA_POST_KERNEL_CHECK(MapRedKeepLowestKernel);
 }
 
@@ -200,17 +198,16 @@ template<typename Saver, typename Reducer, typename DstExp, typename E, typename
 inline void MapReduceKeepDim1(expr::Plan<DstExp, DType> dst,
                               const expr::Plan<E, DType> &plan,
                               DType scale, Shape<4> pshape,
-                              cudaStream_t stream) {
+                              hipStream_t stream) {
   dim3 dimBlock(kBaseThreadNum);
   const int grid_dim_x = (pshape[1] > kMaxGridNum) ? kMaxGridNum : pshape[1];
   const int grid_dim_y = (pshape[1] > kMaxGridNum) ? (pshape[1] + kMaxGridNum - 1) / kMaxGridNum
                                                    : 1;
   dim3 dimGrid(grid_dim_x, grid_dim_y);
   CheckLaunchParam(dimGrid, dimBlock, "MapReduceKeepDim1");
-  MapReduceKeepDim1Kernel<Saver, Reducer, kBaseThreadBits, DType,
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(MapReduceKeepDim1Kernel<Saver,Reducer,kBaseThreadBits, DType,
                           expr::Plan<DstExp, DType>,
-                          expr::Plan<E, DType> >
-      <<<dimGrid, dimBlock, 0, stream>>>(dst, plan, scale, pshape);
+                          expr::Plan<E, DType> >), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, plan, scale, pshape);
   MSHADOW_CUDA_POST_KERNEL_CHECK(MapReduceKeepDim1Kernel);
 }
 
@@ -227,12 +224,11 @@ __global__ void GetBatchedViewKernel(DType **dst, DType *src, int num, int strid
 template<typename DType>
 inline void GetBatchedView(DType **dst, DType *src, int num, int stride,
                            Stream<gpu> *stream) {
-  cudaStream_t stream_ = Stream<gpu>::GetStream(stream);
+  hipStream_t stream_ = Stream<gpu>::GetStream(stream);
   dim3 dimBlock(kBaseThreadNum);
   dim3 dimGrid(1);
   CheckLaunchParam(dimGrid, dimBlock, "GetBatchedView");
-  GetBatchedViewKernel<kBaseThreadBits, DType>
-    <<<dimGrid, dimBlock, 0, stream_>>> (dst, src, num, stride);
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(GetBatchedViewKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream_, dst, src, num, stride);
   MSHADOW_CUDA_POST_KERNEL_CHECK(GetBatchedViewKernel);
 }
 
@@ -383,10 +379,8 @@ inline void Softmax(const Tensor<gpu, 2, DType> &dst,
   dim3 dimGrid(dst.size(0));
   CHECK_EQ(dst.shape_, src.shape_) << "Softmax: shape mismatch";
   CheckLaunchParam(dimGrid, dimBlock, "Softmax");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
-  SoftmaxKernel<kBaseThreadBits, DType>
-      <<<dimGrid, dimBlock, 0, stream>>>
-      (expr::MakePlan(dst),
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(SoftmaxKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream, expr::MakePlan(dst),
        expr::MakePlan(src),
        dst.size(1));
   MSHADOW_CUDA_POST_KERNEL_CHECK(SoftmaxKernel);
@@ -401,10 +395,8 @@ inline void SoftmaxGrad(const Tensor<gpu, 2, DType> &dst,
   CHECK_EQ(dst.shape_, src.shape_) << "SoftmaxGrad: shape mismatch";
   CHECK_EQ(dst.size(0), label.size(0)) << "SoftmaxGrad: label shape mismatch";
   CheckLaunchParam(dimGrid, dimBlock, "SoftmaxGrad");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
-  SoftmaxGradKernel<kBaseThreadBits, DType>
-      <<<dimGrid, dimBlock, 0, stream>>>
-      (expr::MakePlan(dst),
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(SoftmaxGradKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream, expr::MakePlan(dst),
        expr::MakePlan(src),
        expr::MakePlan(label),
        dst.size(1));
@@ -421,10 +413,8 @@ inline void SmoothSoftmaxGrad(const Tensor<gpu, 2, DType> &dst,
   CHECK_EQ(dst.shape_, src.shape_) << "SoftmaxGrad: shape mismatch";
   CHECK_EQ(dst.size(0), label.size(0)) << "SoftmaxGrad: label shape mismatch";
   CheckLaunchParam(dimGrid, dimBlock, "SoftmaxGrad");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
-  SmoothSoftmaxGradKernel<kBaseThreadBits, DType>
-      <<<dimGrid, dimBlock, 0, stream>>>
-      (expr::MakePlan(dst),
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipLaunchKernelGGL((SmoothSoftmaxGradKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream, expr::MakePlan(dst),
        expr::MakePlan(src),
        expr::MakePlan(label),
        dst.size(1),
@@ -442,10 +432,8 @@ inline void SoftmaxGrad(const Tensor<gpu, 2, DType> &dst,
   CHECK_EQ(dst.shape_, src.shape_) << "SoftmaxGrad: shape mismatch";
   CHECK_EQ(dst.size(0), label.size(0)) << "SoftmaxGrad: label shape mismatch";
   CheckLaunchParam(dimGrid, dimBlock, "SoftmaxGrad");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
-  SoftmaxGradKernel<kBaseThreadBits, DType>
-      <<<dimGrid, dimBlock, 0, stream>>>
-      (expr::MakePlan(dst),
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(SoftmaxGradKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream, expr::MakePlan(dst),
        expr::MakePlan(src),
        expr::MakePlan(label),
        dst.size(1),
@@ -464,10 +452,8 @@ inline void SmoothSoftmaxGrad(const Tensor<gpu, 2, DType> &dst,
   CHECK_EQ(dst.shape_, src.shape_) << "SoftmaxGrad: shape mismatch";
   CHECK_EQ(dst.size(0), label.size(0)) << "SoftmaxGrad: label shape mismatch";
   CheckLaunchParam(dimGrid, dimBlock, "SoftmaxGrad");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
-  SmoothSoftmaxGradKernel<kBaseThreadBits, DType>
-      <<<dimGrid, dimBlock, 0, stream>>>
-      (expr::MakePlan(dst),
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipLaunchKernelGGL((SmoothSoftmaxGradKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream, expr::MakePlan(dst),
        expr::MakePlan(src),
        expr::MakePlan(label),
        dst.size(1),
@@ -559,8 +545,8 @@ inline void Softmax(const Tensor<gpu, 3, DType> &dst,
   dim3 dimGrid(dst.size(0));
   CHECK_EQ(dst.shape_, src.shape_) << "Softmax: shape mismatch";
   CheckLaunchParam(dimGrid, dimBlock, "Softmax");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
-  Softmax3DKernel<kBaseThreadBits, DType><<<dimGrid, dimBlock, 0, stream>>>(dst, src);
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(Softmax3DKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, src);
   MSHADOW_CUDA_POST_KERNEL_CHECK(Softmax3DKernel);
 }
 
@@ -574,8 +560,8 @@ inline void SoftmaxGrad(const Tensor<gpu, 3, DType> &dst,
   CHECK_EQ(dst.size(0), label.size(0)) << "SoftmaxGrad: label shape mismatch";
   CHECK_EQ(dst.size(2), label.size(1)) << "SoftmaxGrad: label shape mismatch";
   CheckLaunchParam(dimGrid, dimBlock, "SoftmaxGrad");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
-  Softmax3DGradKernel<kBaseThreadBits, DType><<<dimGrid, dimBlock, 0, stream>>>(dst, src, label);
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(Softmax3DGradKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, src, label);
   MSHADOW_CUDA_POST_KERNEL_CHECK(Softmax3DGradKernel);
 }
 
@@ -590,9 +576,8 @@ inline void SoftmaxGrad(const Tensor<gpu, 3, DType> &dst,
   CHECK_EQ(dst.size(0), label.size(0)) << "SoftmaxGrad: label shape mismatch";
   CHECK_EQ(dst.size(2), label.size(1)) << "SoftmaxGrad: label shape mismatch";
   CheckLaunchParam(dimGrid, dimBlock, "SoftmaxGrad");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
-  Softmax3DGradKernel<kBaseThreadBits, DType><<<dimGrid, dimBlock, 0, stream>>>(
-    dst, src, label, ignore_label);
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(Softmax3DGradKernel<kBaseThreadBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream, dst, src, label, ignore_label);
   MSHADOW_CUDA_POST_KERNEL_CHECK(Softmax3DGradKernel);
 }
 
@@ -685,12 +670,10 @@ inline void AddTakeGrad(Tensor<gpu, 2, DType> dst,
   CHECK_EQ(dst.size(1), src.size(1)) << "AddTakeGrad: shape mismatch";
   CHECK_EQ(index.size(0), src.size(0)) << "AddTakeGrad: shape mismatch";
   CheckLaunchParam(dimGrid, dimBlock, "AddTakeGrad");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
   const int K = dst.shape_[0];
 
-  AddTakeGradKernel<kUnitBits, DType>
-      <<<dimGrid, dimBlock, 0, stream>>>
-      (expr::MakePlan(dst),
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(AddTakeGradKernel<kUnitBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream, expr::MakePlan(dst),
        expr::MakePlan(index),
        expr::MakePlan(src),
        src.size(0),
@@ -719,11 +702,9 @@ inline void AddTakeGradLargeBatch(Tensor<gpu, 2, DType> dst,
   CHECK_EQ(dst.size(1), src.size(1)) << "AddTakeGradLargeBatch: shape mismatch";
   CHECK_EQ(index.size(0), src.size(0)) << "AddTakeGradLargeBatch: shape mismatch";
   CheckLaunchParam(dimGrid, dimBlock, "AddTakeGradLargeBatch");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
 
-  AddTakeGradLargeBatchKernel<kWarpBits, SZ, DType>
-      <<<dimGrid, dimBlock, 0, stream>>>
-      (dst.dptr_,
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(AddTakeGradLargeBatchKernel<kWarpBits, SZ, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream, dst.dptr_,
        sorted.dptr_,
        index.dptr_,
        src.dptr_,
@@ -769,15 +750,13 @@ inline void IndexFill(Tensor<gpu, 2, DType> dst,
   dim3 dimBlock(block_dim_x, block_dim_y);
   dim3 dimGrid(grid_dim_x, grid_dim_y);
   CheckLaunchParam(dimGrid, dimBlock, "IndexFill");
-  cudaStream_t stream = Stream<gpu>::GetStream(dst.stream_);
+  hipStream_t stream = Stream<gpu>::GetStream(dst.stream_);
 
-  IndexFillKernel<kMemUnitBits, DType>
-      <<<dimGrid, dimBlock, 0, stream>>>
-      (expr::MakePlan(dst),
-       expr::MakePlan(index),
-       expr::MakePlan(src),
-       src.size(0),
-       src.size(1));
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(IndexFillKernel<kMemUnitBits, DType>), dim3(dimGrid), dim3(dimBlock), 0, stream,expr::MakePlan(dst),
+      expr::MakePlan(index),
+      expr::MakePlan(src),
+      static_cast<const int>(src.size(0)),
+      static_cast<const int>(src.size(1)));
   MSHADOW_CUDA_POST_KERNEL_CHECK(IndexFillKernel);
 }
 
@@ -786,8 +765,8 @@ inline void SortByKey(Tensor<gpu, 1, KDType> keys, Tensor<gpu, 1, VDType> values
                       bool is_ascend) {
   CHECK_EQ(keys.CheckContiguous(), true);
   CHECK_EQ(values.CheckContiguous(), true);
-#if CUDA_VERSION >= 7000
-  cudaStream_t stream = Stream<gpu>::GetStream(keys.stream_);
+#if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 7000)
+  hipStream_t stream = Stream<gpu>::GetStream(keys.stream_);
   thrust::device_ptr<KDType> key_iter = thrust::device_pointer_cast(keys.dptr_);
   thrust::device_ptr<VDType> value_iter = thrust::device_pointer_cast(values.dptr_);
   if (is_ascend) {

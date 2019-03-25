@@ -1,3 +1,4 @@
+#include <hip/hip_runtime.h>
 /*!
  *  Copyright (c) 2014 by Contributors
  * \file reduce.cuh
@@ -34,7 +35,7 @@ Reduce1DNotAlign(volatile DType buf[1 << xmax_bits], int xsize);
 #ifdef  __DEVICE_EMULATION__
 #define __syncwarp() __syncthreads()
 #else
-#if CUDA_VERSION < 9000
+#if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION < 9000)
 #define __syncwarp()
 #endif
 #endif
