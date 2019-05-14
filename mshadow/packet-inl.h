@@ -51,7 +51,7 @@ struct AlignBytes {
 namespace mshadow {
 namespace packet {
 /*!
- * \brief analog to cudaMallocPitch, allocate a aligned space with num_line * lspace cells
+ * \brief analog to hipMallocPitch, allocate a aligned space with num_line * lspace cells
  * \param out_pitch output parameter, the actuall space allocated for each line
  * \param lspace number of cells required for each line
  * \param num_line number of lines to be allocated
@@ -199,7 +199,7 @@ struct Saver<sv::saveto, TFloat, Arch> {
 }  // namespace mshadow
 
 #include "packet/plain-inl.h"
-#if MSHADOW_USE_SSE && !defined(__CUDACC__)
+#if MSHADOW_USE_SSE && !defined(__HIPCC__)
 #include "packet/sse-inl.h"
 #endif
 
@@ -396,7 +396,7 @@ inline void MapPacketPlan(Tensor<cpu, dim, DType> _dst,
   Tensor<cpu, 2, DType> dst = _dst.FlatTo2D();
   const index_t xlen = packet::LowerAlign<DType, Arch>(dst.size(1));
   const size_t packetSize = packet::Packet<DType, Arch>::size;
-#ifndef __CUDACC__
+#ifndef __HIPCC__
   #pragma omp parallel for
 #endif
   for (openmp_index_t y = 0; y < dst.size(0); ++y) {

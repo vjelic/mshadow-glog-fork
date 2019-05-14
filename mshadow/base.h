@@ -26,7 +26,7 @@
 #include <functional>
 #include <sstream>
 #include <string>
-
+#include <hip-wrappers.h> // dummy include file placed in /opt/rocm/include
 #ifdef _MSC_VER
 //! \cond Doxygen_Suppress
 typedef signed char int8_t;
@@ -68,7 +68,7 @@ typedef unsigned __int64 uint64_t;
 #if MSHADOW_STAND_ALONE
   #define MSHADOW_USE_CBLAS 0
   #define MSHADOW_USE_MKL   0
-  #define MSHADOW_USE_CUDA  0
+  #define MSHADOW_USE_GPU  0
 #endif
 
 /*!
@@ -92,8 +92,8 @@ typedef unsigned __int64 uint64_t;
  * \brief use CUDA support, must ensure that the cuda include path is correct,
  * or directly compile using nvcc
  */
-#ifndef MSHADOW_USE_CUDA
-  #define MSHADOW_USE_CUDA   1
+#ifndef MSHADOW_USE_GPU
+  #define MSHADOW_USE_GPU   1
 #endif
 
 /*!
@@ -107,7 +107,7 @@ typedef unsigned __int64 uint64_t;
  * \brief use CUSOLVER support
  */
 #ifndef MSHADOW_USE_CUSOLVER
-  #define MSHADOW_USE_CUSOLVER MSHADOW_USE_CUDA
+//  #define MSHADOW_USE_CUSOLVER MSHADOW_USE_GPU
 #endif
 
 /*!
@@ -137,7 +137,7 @@ typedef unsigned __int64 uint64_t;
 
 /*! \brief whether use F16C instruction set architecture extension */
 #ifndef MSHADOW_USE_F16C
-  #if defined(_MSC_VER) || defined(__CUDACC__)
+  #if defined(_MSC_VER) || defined(__HIPCC__)
     #define MSHADOW_USE_F16C 0
   #elif defined(__clang__) && \
         ((__clang_major__ < 8) || ((__clang_major__ == 8) && (__clang_minor__ < 1)))
@@ -152,7 +152,7 @@ typedef unsigned __int64 uint64_t;
   #define MSHADOW_USE_NVML 0
 #endif
 // SSE is conflict with cudacc
-#ifdef __CUDACC__
+#ifdef __HIPCC__
   #undef MSHADOW_USE_SSE
   #define MSHADOW_USE_SSE 0
 #endif
@@ -169,10 +169,11 @@ extern "C" {
   #include <mkl_version.h>
 #endif
 
-#if MSHADOW_USE_CUDA
-  #include <cuda.h>
-  #include <cublas_v2.h>
-  #include <curand.h>
+#if MSHADOW_USE_GPU
+  #include <hip/hip_runtime.h>
+  #include <hip-wrappers.h>
+  #include <hipblas.h>
+  #include <hiprand.h>
 #endif
 
 #if MSHADOW_USE_CUDNN == 1
@@ -198,7 +199,7 @@ extern "C" {
 #else
 #define MSHADOW_FORCE_INLINE inline __attribute__((always_inline))
 #endif
-#ifdef __CUDACC__
+#ifdef __HIPCC__
   #define MSHADOW_XINLINE MSHADOW_FORCE_INLINE __device__ __host__
 #else
   #define MSHADOW_XINLINE MSHADOW_FORCE_INLINE
@@ -251,12 +252,12 @@ extern "C" {
  */
 #define MSHADOW_CUDA_CALL(func)                                    \
   {                                                                \
-    cudaError_t e = (func);                                        \
-    if (e == cudaErrorCudartUnloading) {                           \
-      throw dmlc::Error(cudaGetErrorString(e));                    \
+    hipError_t e = (func);                                        \
+    if (e == hipErrorDeinitialized) {                             \
+      throw dmlc::Error(hipGetErrorString(e));                    \
     }                                                              \
-    CHECK(e == cudaSuccess)                                        \
-        << "CUDA: " << cudaGetErrorString(e);                      \
+ /*   CHECK(e == hipSuccess)                                        \
+        << "CUDA: " << hipGetErrorString(e);     */                 \
   }
 
 /*!
@@ -316,9 +317,9 @@ template<>
 struct DataType<float> {
   static const int kFlag = kFloat32;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_32F;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_32F;
 #endif
 #if MSHADOW_USE_CUDNN
   static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_FLOAT;
@@ -330,9 +331,9 @@ template<>
 struct DataType<double> {
   static const int kFlag = kFloat64;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_64F;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_64F;
 #endif
 #if MSHADOW_USE_CUDNN
   static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_DOUBLE;
@@ -344,9 +345,9 @@ template<>
 struct DataType<half::half_t> {
   static const int kFlag = kFloat16;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_16F;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_16F;
 #endif
 #if MSHADOW_USE_CUDNN
   static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_HALF;
@@ -363,9 +364,9 @@ template<>
 struct DataType<uint8_t> {
   static const int kFlag = kUint8;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_8U;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_8U;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   // no uint8 in cudnn for now
@@ -378,9 +379,9 @@ template<>
 struct DataType<int8_t> {
   static const int kFlag = kInt8;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_8I;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_8I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT8;
@@ -392,9 +393,9 @@ template<>
 struct DataType<int32_t> {
   static const int kFlag = kInt32;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const cudaDataType_t kCudaFlag = CUDA_R_32I;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipDataType kCudaFlag = HIP_R_32I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_INT32;
@@ -432,7 +433,7 @@ struct LayoutType;
 template<>
 struct LayoutType<kNCHW> {
   static const index_t kNdim = 4;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
   static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
 #else
   static const int kCudnnFlag = -1;
@@ -442,7 +443,7 @@ struct LayoutType<kNCHW> {
 template<>
 struct LayoutType<kNHWC> {
   static const index_t kNdim = 4;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
   static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC;
 #else
   static const int kCudnnFlag = -1;
@@ -455,7 +456,7 @@ const int default_layout = kNCHW;
 template<>
 struct LayoutType<kNCDHW> {
   static const index_t kNdim = 5;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
   static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
 #else
   static const int kCudnnFlag = -1;
@@ -465,7 +466,7 @@ struct LayoutType<kNCDHW> {
 template<>
 struct LayoutType<kNDHWC> {
   static const index_t kNdim = 5;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
   static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC;
 #else
   static const int kCudnnFlag = -1;
@@ -749,11 +750,11 @@ struct maximum {
   template<typename DType>
   MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src) { // NOLINT(*)
     using namespace std;
-#ifdef __CUDACC__
+#ifdef __HIPCC__
     dst = ::max(dst, src);
 #else
     dst = max(dst, src);
-#endif  // __CUDACC__
+#endif  // __HIPCC__
   }
   /*! \brief do reduction into dst */
   template<typename DType>
@@ -805,11 +806,11 @@ struct minimum {
   template<typename DType>
   MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src) { // NOLINT(*)
     using namespace std;
-#ifdef __CUDACC__
+#ifdef __HIPCC__
     dst = ::min(dst, src);
 #else
     dst = min(dst, src);
-#endif  // __CUDACC__
+#endif  // __HIPCC__
   }
   /*! \brief do reduction into dst */
   template<typename DType>

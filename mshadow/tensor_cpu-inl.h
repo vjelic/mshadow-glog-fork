@@ -55,16 +55,16 @@ inline void *AllocHost_(size_t size);
 template<typename xpu>
 inline void FreeHost_(void * dptr);
 
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 template<>
 inline void *AllocHost_<gpu>(size_t size) {
   void *dptr;
-  MSHADOW_CUDA_CALL(cudaMallocHost(&dptr, size, cudaHostAllocPortable));
+  MSHADOW_CUDA_CALL(hipHostMalloc(&dptr, size, hipHostMallocPortable));
   return dptr;
 }
 template<>
 inline void FreeHost_<gpu>(void *dptr) {
-  MSHADOW_CUDA_CALL(cudaFreeHost(dptr));
+  MSHADOW_CUDA_CALL(hipHostFree(dptr));
 }
 #endif
 
@@ -146,7 +146,7 @@ inline void MapPlan(TRValue<R, cpu, dim, DType> *dst,
                     const expr::Plan<E, DType> &plan) {
   Shape<2> shape = expr::ShapeCheck<dim, R>::Check(dst->self()).FlatTo2D();
   expr::Plan<R, DType> dplan = expr::MakePlan(dst->self());
-#ifndef __CUDACC__
+#ifndef __HIPCC__
   #pragma omp parallel for
 #endif
   // temp remove openmp, as default setting throttles CPU
@@ -215,7 +215,7 @@ inline void MapReduceKeepLowest(TRValue<R, cpu, 1, DType> *dst,
   // execution
   expr::Plan<R, DType> dplan = MakePlan(dst->self());
   expr::Plan<E, DType> splan = MakePlan(exp.self());
-#ifndef __CUDACC__
+#ifndef __HIPCC__
   #pragma omp parallel for
 #endif
   for (openmp_index_t x = 0; x < eshape[1]; ++x) {
@@ -248,7 +248,7 @@ inline void MapReduceKeepHighDim(TRValue<R, cpu, 1, DType> *dst,
   // execution
   expr::Plan<R, DType> dplan = MakePlan(dst->self());
   expr::Plan<E, DType> splan = MakePlan(exp.self());
-#ifndef __CUDACC__
+#ifndef __HIPCC__
   #pragma omp parallel for
 #endif
   for (openmp_index_t c = 0; c < pshape[1]; ++c) {
