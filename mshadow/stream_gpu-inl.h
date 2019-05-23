@@ -32,6 +32,9 @@ struct Stream<gpu> {
   #endif
   /*! \brief cudnn handle */
   #if MSHADOW_USE_CUDNN == 1
+  cudnnHandle_t dnn_handle_;
+  #endif
+  #if MSHADOW_USE_MIOPEN == 1
   miopenHandle_t dnn_handle_;
   #endif
   /*! \brief hipblas handle ownership */
@@ -144,6 +147,16 @@ struct Stream<gpu> {
   }
 // #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
+  inline static cudnnHandle_t GetDnnHandle(Stream<gpu> *stream) {
+    if (stream == NULL) {
+      return 0;
+    } else {
+      CHECK_NE(stream->dnn_handle_ownership_, NoHandle) << "No handle exist in source stream";
+      return stream->dnn_handle_;
+    }
+  }
+#endif
+#if MSHADOW_USE_MIOPEN == 1
   inline static miopenHandle_t GetDnnHandle(Stream<gpu> *stream) {
     if (stream == NULL) {
       return 0;
@@ -157,6 +170,13 @@ struct Stream<gpu> {
 // #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
     if (dnn_handle_ownership_ == OwnHandle) {
+      cudnnStatus_t err = cudnnDestroy(dnn_handle_);
+      this->dnn_handle_ownership_ = NoHandle;
+      CHECK_EQ(err, CUDNN_STATUS_SUCCESS) << cudnnGetErrorString(err);
+    }
+#endif
+#if MSHADOW_USE_MIOPEN == 1
+    if (dnn_handle_ownership_ == OwnHandle) {
       miopenStatus_t err = miopenDestroy(dnn_handle_);
       this->dnn_handle_ownership_ = NoHandle;
       //CHECK_EQ(err, miopenStatusSuccess) << cudnnGetErrorString(err);
@@ -167,6 +187,15 @@ struct Stream<gpu> {
   inline void CreateDnnHandle() {
 // #if MSHADOW_USE_CUDNN == 1 && defined(__HIPCC__)
 #if MSHADOW_USE_CUDNN == 1
+    this->DestroyDnnHandle();
+    cudnnStatus_t err = cudnnCreate(&dnn_handle_);
+    CHECK_EQ(err, CUDNN_STATUS_SUCCESS) << cudnnGetErrorString(err);
+    // At this point, we have the resource which may need to be freed
+    this->dnn_handle_ownership_ = OwnHandle;
+    err = cudnnSetStream(dnn_handle_, stream_);
+    CHECK_EQ(err, CUDNN_STATUS_SUCCESS) << cudnnGetErrorString(err);
+#endif
+#if MSHADOW_USE_MIOPEN == 1
     this->DestroyDnnHandle();
     miopenStatus_t err = miopenCreate(&dnn_handle_);
     //CHECK_EQ(err, miopenStatusSuccess) << cudnnGetErrorString(err);
