@@ -324,7 +324,7 @@ struct DataType<float> {
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
 #if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
-  static const hipDataType kCudaFlag = HIP_R_32F;
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_32F;
 #endif
 #if MSHADOW_USE_CUDNN
   static const miopenDataType_t kCudnnFlag = miopenFloat;
@@ -338,7 +338,7 @@ struct DataType<double> {
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
 #if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
-  static const hipDataType kCudaFlag = HIP_R_64F;
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_64F;
 #endif
 #if MSHADOW_USE_CUDNN
   static const miopenDataType_t kCudnnFlag = miopenFloat;
@@ -352,7 +352,7 @@ struct DataType<half::half_t> {
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
 #if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
-  static const hipDataType kCudaFlag = HIP_R_16F;
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_16F;
 #endif
 #if MSHADOW_USE_CUDNN
   static const miopenDataType_t kCudnnFlag = miopenHalf;
@@ -371,7 +371,7 @@ struct DataType<uint8_t> {
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
 #if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
-  static const hipDataType kCudaFlag = HIP_R_8U;
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_8U;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   // no uint8 in cudnn for now
@@ -386,7 +386,7 @@ struct DataType<int8_t> {
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
 #if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
-  static const hipDataType kCudaFlag = HIP_R_8I;
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_8I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   static const miopenDataType_t kCudnnFlag = miopenFloat;
@@ -400,7 +400,7 @@ struct DataType<int32_t> {
   static const int kLanes = 1;
 #if MSHADOW_USE_GPU
 #if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
-  static const hipDataType kCudaFlag = HIP_R_32I;
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_32I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   static const miopenDataType_t kCudnnFlag = miopenFloat;
