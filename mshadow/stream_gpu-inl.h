@@ -113,6 +113,8 @@ struct Stream<gpu> {
     hipblasStatus_t err = hipblasCreate(&blas_handle_);
     blas_handle_ownership_ = OwnHandle;
     CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Create hipblas handle failed";
+    err = hipblasSetStream(blas_handle_, stream_);
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Setting hipblas stream failed";
   }
 #if MSHADOW_USE_CUSOLVER == 1
   inline static cusolverDnHandle_t GetSolverHandle(Stream<gpu> *stream) {
