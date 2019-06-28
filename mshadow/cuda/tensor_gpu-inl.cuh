@@ -7,10 +7,12 @@
  */
 #ifndef MSHADOW_CUDA_TENSOR_GPU_INL_CUH_
 #define MSHADOW_CUDA_TENSOR_GPU_INL_CUH_
-#include <thrust/device_ptr.h>
-#include <thrust/sort.h>
+#if defined(__HIPCC__)
+  #include <thrust/device_ptr.h>
+  #include <thrust/sort.h>
+#endif
 #if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 7000)
-#include <thrust/system/cuda/execution_policy.h>
+#include <thrust/system/hip/execution_policy.h>
 #endif
 #include "../tensor.h"
 #include "./reduce.cuh"
@@ -771,11 +773,11 @@ inline void SortByKey(Tensor<gpu, 1, KDType> keys, Tensor<gpu, 1, VDType> values
   thrust::device_ptr<VDType> value_iter = thrust::device_pointer_cast(values.dptr_);
   if (is_ascend) {
     thrust::stable_sort_by_key(
-      thrust::cuda::par.on(stream),
+      thrust::hip::par.on(stream),
       key_iter, key_iter + keys.size(0), value_iter, thrust::less<KDType>());  // NOLINT(*)
   } else {
     thrust::stable_sort_by_key(
-      thrust::cuda::par.on(stream),
+      thrust::hip::par.on(stream),
       key_iter, key_iter + keys.size(0), value_iter, thrust::greater<KDType>());  // NOLINT(*)
   }
   MSHADOW_CUDA_POST_KERNEL_CHECK(SortByKey);
