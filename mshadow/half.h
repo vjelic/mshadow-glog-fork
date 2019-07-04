@@ -337,7 +337,9 @@ class MSHADOW_ALIGNED(2) half_t {
 };
 
 /*! \brief overloaded + operator for half_t */
+#if !defined(MSHADOW_USE_THRUST) || (defined(MSHADOW_USE_THRUST) &&  !defined(__HIPCC__))
 MSHADOW_HALF_OPERATOR(half_t, +)
+#endif
 /*! \brief overloaded - operator for half_t */
 MSHADOW_HALF_OPERATOR(half_t, -)
 /*! \brief overloaded * operator for half_t */
