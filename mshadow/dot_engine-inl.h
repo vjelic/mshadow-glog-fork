@@ -520,16 +520,26 @@ struct BLASEngine<gpu, half::half_t> {
   float alpha_f = float(alpha);  // NOLINT(*)
   float beta_f = float(beta);  // NOLINT(*)
   #if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 8000)
-  hipblasStatus_t err = hipblasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
+  /*hipblasStatus_t err = hipblasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
                                        GetT(transa), GetT(transb), m, n, k, &alpha_f,
                                        A, HIPBLAS_R_16F, lda, B, HIPBLAS_R_16F,
-                                       ldb, &beta_f, C, HIPBLAS_R_16F, ldc);
+                                       ldb, &beta_f, C, HIPBLAS_R_16F, ldc);*/
+  hipblasStatus_t err = hipblasSgemm(Stream<gpu>::GetBlasHandle(stream),
+                                       GetT(transa), GetT(transb), m, n, k, &alpha_f,
+                                       reinterpret_cast<const float*>(A), lda,reinterpret_cast<const float*>(B),
+                                       ldb, &beta_f,reinterpret_cast<float*>(C), ldc);
+
     CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas SgemmEx fail";
   #else
-    hipblasStatus_t err = hipblasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
+   /* hipblasStatus_t err = hipblasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
                                        GetT(transa), GetT(transb), m, n, k, &alpha_f,
                                        A, HIPBLAS_R_16F, lda, B, HIPBLAS_R_16F,
-                                       ldb, &beta_f, C, HIPBLAS_R_16F, ldc);
+                                       ldb, &beta_f, C, HIPBLAS_R_16F, ldc);*/
+    hipblasStatus_t err = hipblasSgemm(Stream<gpu>::GetBlasHandle(stream),
+                                       GetT(transa), GetT(transb), m, n, k, &alpha,
+                                       A, lda, B,
+                                       ldb, &beta, C, ldc);
+
     CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas SgemmEx fail";
   #endif  // CUDA_VERSION >= 8000
 #else
