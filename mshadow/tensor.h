@@ -123,8 +123,8 @@ struct Shape {
     return s;
   }
   /*! \return number of valid elements */
-  MSHADOW_XINLINE size_t Size(void) const {
-    size_t size = this->shape_[0];
+  MSHADOW_XINLINE index_t Size(void) const {
+    index_t size = this->shape_[0];
     #pragma unroll
     for (int i = 1; i < kDimension; ++i) {
       size *= this->shape_[i];
@@ -299,6 +299,7 @@ inline Shape<4> ConvertLayout(const Shape<4>& src, int src_layout, int dst_layou
     break;
   default:
     LOG(FATAL) << "Invalid layout for 4d shape " << src_layout;
+    dst = src;  // fixes compiler warning
   }
   Shape<4> dst2;
   switch (dst_layout) {
@@ -312,6 +313,7 @@ inline Shape<4> ConvertLayout(const Shape<4>& src, int src_layout, int dst_layou
     break;
   default:
     LOG(FATAL) << "Invalid layout for 4d shape " << src_layout;
+    dst2 = src;  // fixes compiler warning
   }
   return dst2;
 }
@@ -357,20 +359,20 @@ inline Shape<5> ConvertLayout(const Shape<5>& src, int src_layout, int dst_layou
 }
 
 /*!
- * \brief computaion stream structure, used for asynchronize computation
+ * \brief computaion stream structure, used for asynchronous computations
  */
 template<typename Device>
 struct Stream {
   // this is only a dummy implementation for CPU
   // for GPU, the actual implementation will be specialized in tensor_gpu-inl.h
   /*!
-   * \brief wait for all the computation associated
+   * \brief wait for all the computations associated
    *  with this stream to complete
    */
   inline void Wait(void) {}
   /*!
    * \brief query whether the the stream is idle
-   * \return true if the stream is idle and all the job have been completed
+   * \return true if the stream is idle and all the jobs have been completed
    */
   inline bool CheckIdle(void) {
     return true;
@@ -411,7 +413,7 @@ struct Tensor: public TRValue<Tensor<Device, dimension, DType>,
   // struct memembers
   //--------------------------------
   /*! \brief pointer to the data */
-  DType *dptr_;
+  DType *dptr_ = nullptr;
   /*! \brief shape of the tensor */
   Shape<dimension> shape_;
   /*!
@@ -456,8 +458,8 @@ struct Tensor: public TRValue<Tensor<Device, dimension, DType>,
    * \tparam startdim the starting dimension
    */
   template<int startdim>
-  MSHADOW_XINLINE size_t MemSize(void) const {
-    size_t memsz = this->stride_;
+  MSHADOW_XINLINE index_t MemSize(void) const {
+    index_t memsz = this->stride_;
     #pragma unroll
     for (int i = startdim; i < kSubdim; ++i) {
       memsz *= this->shape_[i];
@@ -474,7 +476,7 @@ struct Tensor: public TRValue<Tensor<Device, dimension, DType>,
   /*!
    * \return memory cost of the tensor, including the aligned x dimension
    */
-  MSHADOW_XINLINE size_t MSize(void) const {
+  MSHADOW_XINLINE index_t MSize(void) const {
     return this->MemSize<0>();
   }
   /*!
@@ -580,7 +582,7 @@ struct Tensor<Device, 1, DType>:
   MSHADOW_XINLINE bool CheckContiguous(void) const {
     return true;
   }
-  MSHADOW_XINLINE size_t MSize(void) const {
+  MSHADOW_XINLINE index_t MSize(void) const {
     return shape_[0];
   }
   MSHADOW_XINLINE index_t size(index_t i) const {
@@ -639,7 +641,7 @@ template<typename Device>
 inline void SetDevice(int devid);
 /*!
  * \brief create a new stream from system
- * \param create_blas_handle whether create blas handle in stream
+ * \param create_blas_handle whether create blas & cusolver handle in stream
  * \param create_dnn_handle whether create cudnn handle in stream
  * \param dev_id device id
  * \return a pointer to the created stream
@@ -649,7 +651,7 @@ template<typename Device>
 inline Stream<Device> *NewStream(bool create_blas_handle,
                                  bool create_dnn_handle,
                                  int dev_id = -1);
-/*! \brief default behavior: create cublas handle 
+/*! \brief default behavior: create cublas handle
  *  \param dev_id device id
  *  \return a pointer to the created stream
  */
@@ -804,7 +806,7 @@ inline void SoftmaxGrad(Tensor<cpu, 2, DType> dst,
  * \param label label info
  */
 template<typename DType>
-inline void SoftmaxGrad(Tensor<gpu, 2, DType> dst,
+inline void SoftmaxGrad(const Tensor<gpu, 2, DType> &dst,
                         const Tensor<gpu, 2, DType> &src,
                         const Tensor<gpu, 1, DType> &label);
 /*!
@@ -842,7 +844,7 @@ inline void AddTakeGrad(Tensor<gpu, 2, DType> dst,
  */
 template<typename IndexType, typename DType>
 inline void AddTakeGradLargeBatch(Tensor<cpu, 2, DType> dst,
-                                  const Tensor<gpu, 1, IndexType>& sorted,
+                                  const Tensor<cpu, 1, IndexType>& sorted,
                                   const Tensor<cpu, 1, IndexType>& index,
                                   const Tensor<cpu, 2, DType> &src);
 /*!
@@ -1055,7 +1057,6 @@ inline void BatchGEMM(Tensor<Device, 3, DType> dst,
 #include "./tensor_gpu-inl.h"
 #include "./io.h"
 #include "./tensor_container.h"
-#include "./tensor_blob.h"
 #include "./random.h"
 // add definition of scalar related operators
 #ifdef MSHADOW_SCALAR_
@@ -1068,7 +1069,10 @@ inline void BatchGEMM(Tensor<Device, 3, DType> dst,
 #define MSHADOW_SCALAR_ double
 #include "./expr_scalar-inl.h"
 #undef MSHADOW_SCALAR_
-#define MSHADOW_SCALAR_ int
+#define MSHADOW_SCALAR_ int32_t
+#include "./expr_scalar-inl.h"
+#undef MSHADOW_SCALAR_
+#define MSHADOW_SCALAR_ int64_t
 #include "./expr_scalar-inl.h"
 #undef MSHADOW_SCALAR_
 #define MSHADOW_SCALAR_ mshadow::half::half_t

@@ -3,13 +3,14 @@
  *  \file random.h
  *  \brief Random inline functions for tensor.
  *  \author Bing Xu, Tianqi Chen
- *   Based on curand|MKL|stdlib
+ *   Based on hiprand|MKL|stdlib
  */
 #ifndef MSHADOW_RANDOM_H_
 #define MSHADOW_RANDOM_H_
 
 #include <cstdlib>
 #include <algorithm>
+#include <random>
 #include "./base.h"
 #include "./tensor.h"
 #include "./tensor_container.h"
@@ -79,6 +80,13 @@ class Random<cpu, DType> {
    */
   inline unsigned GetRandInt() {
     return rnd_engine_();
+  }
+
+  /*!
+   * \brief get a set of random integers
+   */
+  inline void GetRandInt(const Tensor<cpu, 1, unsigned>& dst) {
+    std::generate_n(dst.dptr_, dst.size(0), [&](){ return rnd_engine_(); });
   }
 
   /*!
@@ -257,6 +265,10 @@ class Random<cpu, DType> {
     return expr::reshape(buffer_, shape);
   }
 
+  std::mt19937 &GetRndEngine() {
+    return rnd_engine_;
+  }
+
  private:
 #if MSHADOW_IN_CXX11
   /*! \brief use c++11 random engine. */
@@ -355,7 +367,7 @@ class Random<cpu, DType> {
 };  // class Random<cpu, DType>
 
 // only allow GPU PRNG when cuda is enabled
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 /*! \brief GPU random number generator */
 template<typename DType>
 class Random<gpu, DType> {
@@ -364,36 +376,42 @@ class Random<gpu, DType> {
    * \brief constructor of random engine
    * \param seed random number seed
    */
-  explicit Random(int seed) {
-    curandStatus_t status;
-    status = curandCreateGenerator(&gen_, CURAND_RNG_PSEUDO_DEFAULT);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "Can not create CURAND Generator";
+  explicit Random(int seed) : gen_(NULL) {
     this->Seed(seed);
     buffer_.Resize(Shape1(kRandBufferSize));
   }
   ~Random(void) MSHADOW_THROW_EXCEPTION {
-    curandStatus_t status;
-    status = curandDestroyGenerator(gen_);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "Destory CURAND Gen failed";
+    DeleteGenerator();
   }
   /*!
    * \brief set the stream of computation
    * \param stream computation stream
    */
   inline void set_stream(Stream<gpu> *stream) {
-    curandStatus_t status;
-    status = curandSetStream(gen_, Stream<gpu>::GetStream(stream));
+    hiprandStatus_t status;
+    status = hiprandSetStream(gen_, Stream<gpu>::GetStream(stream));
 
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "set_stream CURAND failed";
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "set_stream HIPRAND failed";
   }
   /*!
    * \brief seed random number generator using this seed
    * \param seed seed of prng
    */
   inline void Seed(int seed) {
-    curandStatus_t status;
-    status = curandSetPseudoRandomGeneratorSeed(gen_, seed);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "Set CURAND seed failed.";
+    // Create a new rng, either initially or if the RNG type can't reset its offset.
+    if (gen_ == NULL || (hiprandSetGeneratorOffset(gen_, 0ULL) != HIPRAND_STATUS_SUCCESS))
+      CreateGenerator();
+    // Now set the seed.
+    hiprandStatus_t status;
+    status = hiprandSetPseudoRandomGeneratorSeed(gen_, static_cast<uint64_t>(seed));
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "Set HIPRAND seed failed.";
+  }
+  /*!
+   * \brief get a set of random integers
+   */
+  inline void GetRandInt(const Tensor<gpu, 1, unsigned>& dst) {
+    hiprandStatus_t status = hiprandGenerate(gen_, dst.dptr_, dst.size(0));
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "HIPRAND Gen rand ints failed.";
   }
   /*!
    * \brief generate data from uniform [a,b)
@@ -449,41 +467,56 @@ class Random<gpu, DType> {
 
  private:
   inline void GenGaussian(float *dptr, size_t size, float mu, float sigma) {
-    curandStatus_t status;
-    status = curandGenerateNormal(gen_, dptr, size, mu, sigma);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "CURAND Gen Normal float failed."
+    hiprandStatus_t status;
+    status = hiprandGenerateNormal(gen_, dptr, size, mu, sigma);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "HIPRAND Gen Normal float failed."
                                             << " size = " << size
                                             << ",mu = " << mu
                                             << ",sigma = " << sigma;
   }
   inline void GenGaussian(double *dptr, size_t size, double mu, double sigma) {
-    curandStatus_t status;
-    status = curandGenerateNormalDouble(gen_, dptr, size, mu, sigma);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "CURAND Gen Normal double failed."
+    hiprandStatus_t status;
+    status = hiprandGenerateNormalDouble(gen_, dptr, size, mu, sigma);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "HIPRAND Gen Normal double failed."
                                             << " size = " << size
                                             << ",mu = " << mu
                                             << ",sigma = " << sigma;
   }
   inline void GenUniform(float *dptr, size_t size) {
-    curandStatus_t status;
-    status = curandGenerateUniform(gen_, dptr, size);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "CURAND Gen Uniform float failed."
+    hiprandStatus_t status;
+    status = hiprandGenerateUniform(gen_, dptr, size);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "HIPRAND Gen Uniform float failed."
                                             << " size = " << size;
   }
   inline void GenUniform(double *dptr, size_t size) {
-    curandStatus_t status;
-    status = curandGenerateUniformDouble(gen_, dptr, size);
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << "CURAND Gen Uniform double failed."
+    hiprandStatus_t status;
+    status = hiprandGenerateUniformDouble(gen_, dptr, size);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "HIPRAND Gen Uniform double failed."
                                             << " size = " << size;
   }
-  /*! \brief random numbeer generator */
-  curandGenerator_t gen_;
+  inline void CreateGenerator() {
+    if (gen_ != NULL)
+      DeleteGenerator();
+    hiprandStatus_t status;
+    status = hiprandCreateGenerator(&gen_, HIPRAND_RNG_PSEUDO_DEFAULT);
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "Cannot create HIPRAND Generator";
+  }
+  inline void DeleteGenerator() {
+    if (gen_ != NULL) {
+      hiprandStatus_t status;
+      status = hiprandDestroyGenerator(gen_);
+      CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << "Destory HIPRAND Gen failed";
+      gen_ = NULL;
+    }
+  }
+  /*! \brief random number generator */
+  hiprandGenerator_t gen_;
   /*! \brief templ buffer */
   TensorContainer<gpu, 1, DType> buffer_;
 };  // class Random<gpu, DType>
-#endif  // MSHADOW_USE_CUDA
+#endif  // MSHADOW_USE_GPU
 
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 // implementations that depends on cuda kernels
 template<typename DType>
 template<int dim>
@@ -503,7 +536,7 @@ template<typename DType>
 template<int dim>
 inline void Random<gpu, DType>::SampleGaussian(
     Tensor<gpu, dim, DType> *dst, DType mu, DType sigma) {
-  // We need to check whether the shape size is even since CuRand supports only normal distribution
+  // We need to check whether the shape size is even since hiprand supports only normal distribution
   // generation of even number of elements.
   if (dst->CheckContiguous() && (dst->shape_.Size() % 2 == 0)) {
     this->GenGaussian(dst->dptr_, dst->shape_.Size(), mu, sigma);
@@ -532,6 +565,6 @@ Random<gpu, DType>::uniform(Shape<dim> shape) {
   this->GenUniform(buffer_.dptr_, buffer_.size(0));
   return expr::reshape(buffer_, shape);
 }
-#endif  // __CUDACC__
+#endif  // __HIPCC__
 }  // namespace mshadow
 #endif  // MSHADOW_RANDOM_H_

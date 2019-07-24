@@ -11,7 +11,7 @@
 #include "./tensor.h"
 
 namespace mshadow {
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 template<>
 inline void InitTensorEngine<gpu>(int dev_id) {
   hipDeviceProp_t prop;
@@ -40,13 +40,13 @@ inline void AllocSpace(Tensor<gpu, dim, DType> *obj, bool pad) {
   size_t pitch;
   // common choice for cuda mem align unit is 32
   if (pad && obj->size(dim - 1) >= MSHADOW_MIN_PAD_RATIO * 32) {
-    MSHADOW_CUDA_CALL(cudaMallocPitch(reinterpret_cast<void**>(&(obj->dptr_)), &pitch,
+    MSHADOW_CUDA_CALL(hipMallocPitch(reinterpret_cast<void**>(&(obj->dptr_)), &pitch,
                                       obj->size(dim - 1) * sizeof(DType),
                                       obj->shape_.FlatTo2D()[0]));
     obj->stride_ = static_cast<index_t>(pitch / sizeof(DType));
   } else {
     obj->stride_ = obj->size(dim - 1);
-    MSHADOW_CUDA_CALL(cudaMallocPitch(reinterpret_cast<void**>(&(obj->dptr_)), &pitch,
+    MSHADOW_CUDA_CALL(hipMallocPitch(reinterpret_cast<void**>(&(obj->dptr_)), &pitch,
                                       obj->shape_.Size() * sizeof(DType), 1));
   }
 }
@@ -63,7 +63,7 @@ inline void Copy(Tensor<A, dim, DType> _dst,
   CHECK_EQ(_dst.shape_, _src.shape_) << "Copy:shape mismatch";
   Tensor<A, 2, DType> dst = _dst.FlatTo2D();
   Tensor<B, 2, DType> src = _src.FlatTo2D();
-  MSHADOW_CUDA_CALL(cudaMemcpy2DAsync(dst.dptr_, dst.stride_ * sizeof(DType),
+  MSHADOW_CUDA_CALL(hipMemcpy2DAsync(dst.dptr_, dst.stride_ * sizeof(DType),
                                       src.dptr_, src.stride_ * sizeof(DType),
                                       dst.size(1) * sizeof(DType),
                                       dst.size(0), kind,
@@ -91,11 +91,11 @@ inline void Copy(Tensor<gpu, dim, DType> dst,
                  Stream<gpu> *stream) {
   Copy(dst, src, hipMemcpyHostToDevice, stream);
 }
-#endif  // MSHADOW_USE_CUDA
+#endif  // MSHADOW_USE_GPU
 }  // namespace mshadow
 
 // the following part is included only if compiler is nvcc
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 #include "./cuda/tensor_gpu-inl.cuh"
 
 namespace mshadow {
@@ -168,14 +168,22 @@ inline void Softmax(Tensor<gpu, 3, DType> dst,
 }
 
 template<typename DType>
-inline void SoftmaxGrad(Tensor<gpu, 2, DType> dst,
+inline void SoftmaxGrad(const Tensor<gpu, 2, DType> &dst,
                         const Tensor<gpu, 2, DType> &src,
                         const Tensor<gpu, 1, DType> &label) {
   cuda::SoftmaxGrad(dst, src, label);
 }
 
 template<typename DType>
-inline void SoftmaxGrad(Tensor<gpu, 2, DType> dst,
+inline void SmoothSoftmaxGrad(const Tensor<gpu, 2, DType> &dst,
+                              const Tensor<gpu, 2, DType> &src,
+                              const Tensor<gpu, 1, DType> &label,
+                              const float alpha) {
+  cuda::SmoothSoftmaxGrad(dst, src, label, alpha);
+}
+
+template<typename DType>
+inline void SoftmaxGrad(const Tensor<gpu, 2, DType> &dst,
                         const Tensor<gpu, 2, DType> &src,
                         const Tensor<gpu, 1, DType> &label,
                         const DType &ignore_label) {
@@ -183,14 +191,23 @@ inline void SoftmaxGrad(Tensor<gpu, 2, DType> dst,
 }
 
 template<typename DType>
-inline void SoftmaxGrad(Tensor<gpu, 3, DType> dst,
+inline void SmoothSoftmaxGrad(const Tensor<gpu, 2, DType> &dst,
+                              const Tensor<gpu, 2, DType> &src,
+                              const Tensor<gpu, 1, DType> &label,
+                              const DType &ignore_label,
+                              const float alpha) {
+  cuda::SmoothSoftmaxGrad(dst, src, label, ignore_label, alpha);
+}
+
+template<typename DType>
+inline void SoftmaxGrad(const Tensor<gpu, 3, DType> &dst,
                         const Tensor<gpu, 3, DType> &src,
                         const Tensor<gpu, 2, DType> &label) {
   cuda::SoftmaxGrad(dst, src, label);
 }
 
 template<typename DType>
-inline void SoftmaxGrad(Tensor<gpu, 3, DType> dst,
+inline void SoftmaxGrad(const Tensor<gpu, 3, DType> &dst,
                         const Tensor<gpu, 3, DType> &src,
                         const Tensor<gpu, 2, DType> &label,
                         const DType &ignore_label) {
@@ -225,5 +242,5 @@ inline void IndexFill(Tensor<gpu, 2, DType> dst,
   cuda::IndexFill(dst, index, src);
 }
 }  // namespace mshadow
-#endif  // __CUDACC__
+#endif  // __HIPCC__
 #endif  // MSHADOW_TENSOR_GPU_INL_H_

@@ -14,7 +14,9 @@
 #ifndef _CRT_SECURE_NO_DEPRECATE
 #define _CRT_SECURE_NO_DEPRECATE
 #endif
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #endif
 #include <cmath>
 #include <cstdio>
@@ -24,7 +26,7 @@
 #include <functional>
 #include <sstream>
 #include <string>
-
+#include <hip-wrappers.h> // dummy include file placed in /opt/rocm/include
 #ifdef _MSC_VER
 //! \cond Doxygen_Suppress
 typedef signed char int8_t;
@@ -66,7 +68,7 @@ typedef unsigned __int64 uint64_t;
 #if MSHADOW_STAND_ALONE
   #define MSHADOW_USE_CBLAS 0
   #define MSHADOW_USE_MKL   0
-  #define MSHADOW_USE_CUDA  0
+  #define MSHADOW_USE_GPU  0
 #endif
 
 /*!
@@ -90,8 +92,8 @@ typedef unsigned __int64 uint64_t;
  * \brief use CUDA support, must ensure that the cuda include path is correct,
  * or directly compile using nvcc
  */
-#ifndef MSHADOW_USE_CUDA
-  #define MSHADOW_USE_CUDA   1
+#ifndef MSHADOW_USE_GPU
+  #define MSHADOW_USE_GPU   1
 #endif
 
 /*!
@@ -99,6 +101,13 @@ typedef unsigned __int64 uint64_t;
  */
 #ifndef MSHADOW_USE_CUDNN
   #define MSHADOW_USE_CUDNN 0
+#endif
+
+/*!
+ * \brief use CUSOLVER support
+ */
+#ifndef MSHADOW_USE_CUSOLVER
+//  #define MSHADOW_USE_CUSOLVER MSHADOW_USE_GPU
 #endif
 
 /*!
@@ -113,20 +122,37 @@ typedef unsigned __int64 uint64_t;
  * \brief macro to decide existence of c++11 compiler
  */
 #ifndef MSHADOW_IN_CXX11
-#define MSHADOW_IN_CXX11 (defined(__GXX_EXPERIMENTAL_CXX0X__) ||\
-                          __cplusplus >= 201103L || defined(_MSC_VER))
+  #if (defined(__GXX_EXPERIMENTAL_CXX0X__) ||\
+      __cplusplus >= 201103L || defined(_MSC_VER))
+    #define MSHADOW_IN_CXX11 1
+  #else
+    #define MSHADOW_IN_CXX11 0
+  #endif
 #endif
 
 /*! \brief whether use SSE */
 #ifndef MSHADOW_USE_SSE
   #define MSHADOW_USE_SSE 1
 #endif
+
+/*! \brief whether use F16C instruction set architecture extension */
+#ifndef MSHADOW_USE_F16C
+  #if defined(_MSC_VER) || defined(__HIPCC__)
+    #define MSHADOW_USE_F16C 0
+  #elif defined(__clang__) && \
+        ((__clang_major__ < 8) || ((__clang_major__ == 8) && (__clang_minor__ < 1)))
+    #define MSHADOW_USE_F16C 0
+  #else
+    #define MSHADOW_USE_F16C 1
+  #endif
+#endif
+
 /*! \brief whether use NVML to get dynamic info */
 #ifndef MSHADOW_USE_NVML
   #define MSHADOW_USE_NVML 0
 #endif
 // SSE is conflict with cudacc
-#ifdef __CUDACC__
+#ifdef __HIPCC__
   #undef MSHADOW_USE_SSE
   #define MSHADOW_USE_SSE 0
 #endif
@@ -140,16 +166,27 @@ extern "C" {
   #include <mkl_cblas.h>
   #include <mkl_vsl.h>
   #include <mkl_vsl_functions.h>
+  #include <mkl_version.h>
 #endif
 
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
   #include <hip/hip_runtime.h>
-  #include <cublas_v2.h>
-  #include <curand.h>
+  #include <hip-wrappers.h>
+  #include <hipblas.h>
+  #include <hiprand.h>
 #endif
 
 #if MSHADOW_USE_CUDNN == 1
-  #include <cudnn.h>
+  #include <miopen/miopen.h>
+  #define CUDNN_MAJOR      6
+  #define CUDNN_MINOR      0
+  #define CUDNN_PATCHLEVEL 21
+  #define CUDNN_VERSION    (CUDNN_MAJOR * 1000 + CUDNN_MINOR * 100 + CUDNN_PATCHLEVEL)
+
+#endif
+
+#if MSHADOW_USE_CUSOLVER == 1
+  #include <cusolverDn.h>
 #endif
 
 #if MSHADOW_USE_NVML
@@ -167,7 +204,7 @@ extern "C" {
 #else
 #define MSHADOW_FORCE_INLINE inline __attribute__((always_inline))
 #endif
-#ifdef __CUDACC__
+#ifdef __HIPCC__
   #define MSHADOW_XINLINE MSHADOW_FORCE_INLINE __device__ __host__
 #else
   #define MSHADOW_XINLINE MSHADOW_FORCE_INLINE
@@ -189,7 +226,7 @@ extern "C" {
  *  template arguments can be detected
  */
 #ifndef MSHADOW_DEFAULT_DTYPE
-#define MSHADOW_DEFAULT_DTYPE = default_real_t
+#define MSHADOW_DEFAULT_DTYPE = ::mshadow::default_real_t
 #endif
 
 /*!
@@ -207,6 +244,12 @@ extern "C" {
 #define MSHADOW_NO_EXCEPTION
 #endif
 
+#if defined(_MSC_VER)
+#define MSHADOW_ALIGNED(x) __declspec(align(x))
+#else
+#define MSHADOW_ALIGNED(x) __attribute__ ((aligned(x)))
+#endif
+
 /*!
  * \brief Protected cuda call in mshadow
  * \param func Expression to call.
@@ -215,11 +258,11 @@ extern "C" {
 #define MSHADOW_CUDA_CALL(func)                                    \
   {                                                                \
     hipError_t e = (func);                                        \
-    if (e == hipErrorDeinitialized) {                           \
+    if (e == hipErrorDeinitialized) {                             \
       throw dmlc::Error(hipGetErrorString(e));                    \
     }                                                              \
-    CHECK(e == hipSuccess)                                        \
-        << "CUDA: " << hipGetErrorString(e);                      \
+ /*   CHECK(e == hipSuccess)                                        \
+        << "CUDA: " << hipGetErrorString(e);     */                 \
   }
 
 /*!
@@ -248,7 +291,11 @@ const unsigned kRandBufferSize = 1000000;
 /*! \brief pi  */
 const float kPi = 3.1415926f;
 /*! \brief type that will be used for index */
-typedef unsigned index_t;
+#if MSHADOW_INT64_TENSOR_SIZE == 1
+  typedef int64_t index_t;
+#else
+  typedef int32_t index_t;
+#endif
 
 #ifdef _WIN32
   /*! \brief openmp index for windows */
@@ -268,7 +315,8 @@ enum TypeFlag {
   kFloat16 = 2,
   kUint8 = 3,
   kInt32 = 4,
-  kInt8  = 5
+  kInt8  = 5,
+  kInt64 = 6,
 };
 
 template<typename DType>
@@ -278,12 +326,12 @@ template<>
 struct DataType<float> {
   static const int kFlag = kFloat32;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const miopenDataType_t kCudaFlag = CUDA_R_32F;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_32F;
 #endif
 #if MSHADOW_USE_CUDNN
-  static const miopenDataType_t kCudnnFlag = CUDNN_DATA_FLOAT;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
   typedef float ScaleType;
 #endif
 #endif
@@ -292,12 +340,12 @@ template<>
 struct DataType<double> {
   static const int kFlag = kFloat64;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const miopenDataType_t kCudaFlag = CUDA_R_64F;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_64F;
 #endif
 #if MSHADOW_USE_CUDNN
-  static const miopenDataType_t kCudnnFlag = CUDNN_DATA_DOUBLE;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
   typedef double ScaleType;
 #endif
 #endif
@@ -306,12 +354,12 @@ template<>
 struct DataType<half::half_t> {
   static const int kFlag = kFloat16;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const miopenDataType_t kCudaFlag = CUDA_R_16F;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_16F;
 #endif
 #if MSHADOW_USE_CUDNN
-  static const miopenDataType_t kCudnnFlag = CUDNN_DATA_HALF;
+  static const miopenDataType_t kCudnnFlag = miopenHalf;
   typedef float ScaleType;
 #endif
 #endif
@@ -325,13 +373,13 @@ template<>
 struct DataType<uint8_t> {
   static const int kFlag = kUint8;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const miopenDataType_t kCudaFlag = CUDA_R_8U;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_8U;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
   // no uint8 in cudnn for now
-  static const cmiopenDataType_t kCudnnFlag = CUDNN_DATA_INT8;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
   typedef uint8_t ScaleType;
 #endif
 #endif
@@ -340,12 +388,12 @@ template<>
 struct DataType<int8_t> {
   static const int kFlag = kInt8;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const miopenDataType_t kCudaFlag = CUDA_R_8I;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_8I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
-  static const miopenDataType_t kCudnnFlag = CUDNN_DATA_INT8;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
   typedef int8_t ScaleType;
 #endif
 #endif
@@ -354,15 +402,20 @@ template<>
 struct DataType<int32_t> {
   static const int kFlag = kInt32;
   static const int kLanes = 1;
-#if MSHADOW_USE_CUDA
-#if (CUDA_VERSION >= 8000)
-  static const miopenDataType_t kCudaFlag = CUDA_R_32I;
+#if MSHADOW_USE_GPU
+#if (defined(__HIP_PLATFORM_NVCC__) && (CUDA_VERSION >= 8000)) || defined(__HIP_PLATFORM_HCC__)
+  static const hipblasDatatype_t kCudaFlag = HIPBLAS_R_32I;
 #endif
 #if (MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 6)
-  static const miopenDataType_t kCudnnFlag = CUDNN_DATA_INT32;
+  static const miopenDataType_t kCudnnFlag = miopenFloat;
   typedef int32_t ScaleType;
 #endif
 #endif
+};
+template<>
+struct DataType<int64_t> {
+  static const int kFlag = kInt64;
+  static const int kLanes = 1;
 };
 
 /*! \brief type enum value for default real type */
@@ -389,8 +442,8 @@ struct LayoutType;
 template<>
 struct LayoutType<kNCHW> {
   static const index_t kNdim = 4;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
@@ -399,8 +452,8 @@ struct LayoutType<kNCHW> {
 template<>
 struct LayoutType<kNHWC> {
   static const index_t kNdim = 4;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC;
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
@@ -412,8 +465,8 @@ const int default_layout = kNCHW;
 template<>
 struct LayoutType<kNCDHW> {
   static const index_t kNdim = 5;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
@@ -422,8 +475,8 @@ struct LayoutType<kNCDHW> {
 template<>
 struct LayoutType<kNDHWC> {
   static const index_t kNdim = 5;
-#if (MSHADOW_USE_CUDA && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
-  static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC;
+#if (MSHADOW_USE_GPU && MSHADOW_USE_CUDNN == 1 && CUDNN_MAJOR >= 4)
+  //static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NHWC; //TODO tensor format not supported
 #else
   static const int kCudnnFlag = -1;
 #endif
@@ -592,6 +645,11 @@ template<>
 MSHADOW_XINLINE int MinValue<int32_t>(void) {
   return INT_MIN;
 }
+/*! \brief minimum value of int64_t */
+template<>
+MSHADOW_XINLINE int64_t MinValue<int64_t>(void) {
+  return LLONG_MIN;
+}
 
 /*!
  * \brief maximum value of certain types
@@ -609,6 +667,11 @@ template<>
 MSHADOW_XINLINE double MaxValue<double>(void) {
   return DBL_MAX;
 }
+/*! \brief maximum value of half */
+template<>
+MSHADOW_XINLINE half::half_t MaxValue<half::half_t>(void) {
+  return MSHADOW_HALF_MAX;
+}
 /*! \brief maximum value of uint8_t */
 template<>
 MSHADOW_XINLINE uint8_t MaxValue<uint8_t>(void) {
@@ -624,6 +687,11 @@ template<>
 MSHADOW_XINLINE int MaxValue<int32_t>(void) {
   return INT_MAX;
 }
+/*! \brief maximum value of int64_t */
+template<>
+MSHADOW_XINLINE int64_t MaxValue<int64_t>(void) {
+  return LLONG_MAX;
+}
 }  // namespace limits
 
 /*! \brief sum reducer */
@@ -633,6 +701,34 @@ struct sum {
   MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src) { // NOLINT(*)
     dst += src;
   }
+  /*! \brief do stable reduction into dst */
+  template<typename DType>
+  MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src, volatile DType& residual) { // NOLINT(*)
+    DType y = src - residual;
+    DType t = dst + y;
+    residual = (t - dst) - y;
+    dst = t;
+  }
+  /*! \brief combine the results of two reducers */
+  template<typename DType>
+  MSHADOW_XINLINE static void Merge(volatile DType& dst_val, volatile DType& src_val) { // NOLINT(*)
+    Reduce(dst_val, src_val);
+  }
+  /*! \brief combine the results of two reducers */
+  template<typename DType>
+  MSHADOW_XINLINE static void Merge(volatile DType& dst_val, volatile DType& dst_residual, volatile DType& src_val, volatile DType& src_residual) { // NOLINT(*)
+    DType t1 = dst_val + src_val;
+    DType e = t1 - dst_val;
+    DType t2 = ((src_val - e) + (dst_val - (t1 - e))) + dst_residual + src_residual;
+    dst_val = t1 + t2;
+    dst_residual = t2 - (dst_val - t1);
+  }
+  /*! \brief finalize reduction */
+  template<typename DType>
+  MSHADOW_XINLINE static void Finalize(volatile DType& dst) {} // NOLINT(*)
+  /*! \brief finalize reduction */
+  template<typename DType>
+  MSHADOW_XINLINE static void Finalize(volatile DType& dst, volatile DType& residual) {} // NOLINT(*)
   /*!
    *\brief calculate gradient of redres with respect to redsrc,
    * redres: reduced result, redsrc: one of reduction element
@@ -648,6 +744,14 @@ struct sum {
   MSHADOW_XINLINE static void SetInitValue(DType &initv) { // NOLINT(*)
     initv = 0;
   }
+  /*!
+   *\brief set the initial value during reduction
+   */
+  template<typename DType>
+  MSHADOW_XINLINE static void SetInitValue(DType &initv, DType &residual) { // NOLINT(*)
+    SetInitValue(initv);
+    residual = 0;
+  }
 };
 /*! \brief maximum reducer */
 struct maximum {
@@ -655,12 +759,33 @@ struct maximum {
   template<typename DType>
   MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src) { // NOLINT(*)
     using namespace std;
-#ifdef __CUDACC__
+#ifdef __HIPCC__
     dst = ::max(dst, src);
 #else
     dst = max(dst, src);
-#endif  // __CUDACC__
+#endif  // __HIPCC__
   }
+  /*! \brief do reduction into dst */
+  template<typename DType>
+  MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src, volatile DType &none) { // NOLINT(*)
+    Reduce(dst, src);
+  }
+  /*! \brief combine the results of two reducers */
+  template<typename DType>
+  MSHADOW_XINLINE static void Merge(volatile DType& dst_val, volatile DType& src_val) { // NOLINT(*)
+    Reduce(dst_val, src_val);
+  }
+  /*! \brief combine the results of two reducers */
+  template<typename DType>
+  MSHADOW_XINLINE static void Merge(volatile DType& dst_val, volatile DType& dst_residual, volatile DType& src_val, volatile DType& src_residual) { // NOLINT(*)
+    Reduce(dst_val, src_val);
+  }
+  /*! \brief finalize reduction */
+  template<typename DType>
+  MSHADOW_XINLINE static void Finalize(volatile DType& dst) {} // NOLINT(*)
+  /*! \brief finalize reduction */
+  template<typename DType>
+  MSHADOW_XINLINE static void Finalize(volatile DType& dst, volatile DType& residual) {} // NOLINT(*)
   /*!
    * \brief calculate gradient of redres with respect to redsrc,
    * redres: reduced result, redsrc: one of reduction element
@@ -676,6 +801,13 @@ struct maximum {
   MSHADOW_XINLINE static void SetInitValue(DType &initv) { // NOLINT(*)
     initv = limits::MinValue<DType>();
   }
+  /*!
+   *\brief set the initial value during reduction
+   */
+  template<typename DType>
+  MSHADOW_XINLINE static void SetInitValue(DType &initv, DType &none) { // NOLINT(*)
+    SetInitValue(initv);
+  }
 };
 /*! \brief minimum reducer */
 struct minimum {
@@ -683,12 +815,33 @@ struct minimum {
   template<typename DType>
   MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src) { // NOLINT(*)
     using namespace std;
-#ifdef __CUDACC__
+#ifdef __HIPCC__
     dst = ::min(dst, src);
 #else
     dst = min(dst, src);
-#endif  // __CUDACC__
+#endif  // __HIPCC__
   }
+  /*! \brief do reduction into dst */
+  template<typename DType>
+  MSHADOW_XINLINE static void Reduce(volatile DType& dst,  volatile DType src, volatile DType &none) { // NOLINT(*)
+    Reduce(dst, src);
+  }
+  /*! \brief combine the results of two reducers */
+  template<typename DType>
+  MSHADOW_XINLINE static void Merge(volatile DType& dst_val, volatile DType& src_val) { // NOLINT(*)
+    Reduce(dst_val, src_val);
+  }
+  /*! \brief combine the results of two reducers */
+  template<typename DType>
+  MSHADOW_XINLINE static void Merge(volatile DType& dst_val, volatile DType& dst_residual, volatile DType& src_val, volatile DType& src_residual) { // NOLINT(*)
+    Reduce(dst_val, src_val);
+  }
+  /*! \brief finalize reduction */
+  template<typename DType>
+  MSHADOW_XINLINE static void Finalize(volatile DType& dst) {} // NOLINT(*)
+  /*! \brief finalize reduction */
+  template<typename DType>
+  MSHADOW_XINLINE static void Finalize(volatile DType& dst, volatile DType& residual) {} // NOLINT(*)
   /*!
    * \brief calculate gradient of redres with respect to redsrc,
    * redres: reduced result, redsrc: one of reduction element
@@ -702,7 +855,14 @@ struct minimum {
    */
   template<typename DType>
   MSHADOW_XINLINE static void SetInitValue(DType &initv) { // NOLINT(*)
-    initv = -limits::MinValue<DType>();
+    initv = limits::MaxValue<DType>();
+  }
+  /*!
+   *\brief set the initial value during reduction
+   */
+  template<typename DType>
+  MSHADOW_XINLINE static void SetInitValue(DType &initv, DType &none) { // NOLINT(*)
+    SetInitValue(initv);
   }
 };
 }  // namespace red
@@ -745,6 +905,12 @@ struct minimum {
       {__VA_ARGS__}                                 \
     }                                               \
     break;                                          \
+  case mshadow::kInt64:                             \
+    {                                               \
+      typedef int64_t DType;                        \
+      {__VA_ARGS__}                                 \
+    }                                               \
+    break;                                          \
   default:                                          \
     LOG(FATAL) << "Unknown type enum " << type;     \
   }
@@ -781,8 +947,33 @@ struct minimum {
       {__VA_ARGS__}                                       \
     }                                                     \
     break;                                                \
+  case mshadow::kInt64:                                   \
+    {                                                     \
+      typedef int64_t DType;                              \
+      {__VA_ARGS__}                                       \
+    }                                                     \
+    break;                                                \
   default:                                                \
     LOG(FATAL) << "Unknown type enum " << type;           \
+  }
+
+#define MSHADOW_SGL_DBL_TYPE_SWITCH(type, DType, ...)  \
+  switch (type) {                                      \
+  case mshadow::kFloat32:                              \
+    {                                                  \
+      typedef float DType;                             \
+      {__VA_ARGS__}                                    \
+    }                                                  \
+    break;                                             \
+  case mshadow::kFloat64:                              \
+    {                                                  \
+      typedef double DType;                            \
+      {__VA_ARGS__}                                    \
+    }                                                  \
+    break;                                             \
+  default:                                             \
+    LOG(FATAL) << "This operation only supports "      \
+                  "32-bit and 64-bit floating point";  \
   }
 
 #define MSHADOW_REAL_TYPE_SWITCH(type, DType, ...)  \
@@ -816,6 +1007,10 @@ struct minimum {
   case mshadow::kInt32:                             \
     LOG(FATAL) << "This operation only support "    \
                   "floating point types, not int32";\
+    break;                                          \
+  case mshadow::kInt64:                             \
+    LOG(FATAL) << "This operation only support "    \
+                  "floating point types, not int64";\
     break;                                          \
   default:                                          \
     LOG(FATAL) << "Unknown type enum " << type;     \
@@ -856,6 +1051,10 @@ struct minimum {
     LOG(FATAL) << "This operation only support "    \
                   "floating point types, not int32";\
     break;                                          \
+  case mshadow::kInt64:                             \
+    LOG(FATAL) << "This operation only support "    \
+                  "floating point types, not int64";\
+    break;                                          \
   default:                                          \
     LOG(FATAL) << "Unknown type enum " << type$;    \
   }
@@ -890,23 +1089,15 @@ struct minimum {
     LOG(FATAL) << "Unknown layout enum " << layout; \
   }
 
-#define MSHADOW_INT_TYPE_SWITCH(type, DType, ...)   \
+/*!
+ * \brief Only supports int64 index type for aux_data
+ * in NDArray class fow now.
+ */
+#define MSHADOW_IDX_TYPE_SWITCH(type, DType, ...)   \
   switch (type) {                                   \
-  case mshadow::kUint8:                             \
+  case mshadow::kInt64:                             \
     {                                               \
-      typedef uint8_t DType;                        \
-      {__VA_ARGS__}                                 \
-    }                                               \
-    break;                                          \
-  case mshadow::kInt8:                              \
-    {                                               \
-      typedef int8_t DType;                         \
-      {__VA_ARGS__}                                 \
-    }                                               \
-    break;                                          \
-  case mshadow::kInt32:                             \
-    {                                               \
-      typedef int32_t DType;                        \
+      typedef int64_t DType;                        \
       {__VA_ARGS__}                                 \
     }                                               \
     break;                                          \

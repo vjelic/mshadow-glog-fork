@@ -23,18 +23,18 @@ namespace expr {
 template<typename DType>
 struct RangeExp:
       public Exp<RangeExp<DType>, DType, type::kMapper> {
-  const float start_;
-  const float stop_;
-  const float step_;
+  const DType start_;
+  const DType stop_;
+  const DType step_;
   const int repeat_;
   /*! \brief constructor */
-  RangeExp(float start, float stop, float step, int repeat)
+  RangeExp(DType start, DType stop, DType step, int repeat)
       : start_(start), stop_(stop), step_(step), repeat_(repeat) {}
 };
 
 template<typename DType>
 inline RangeExp<DType>
-range(float start, float stop, float step = 1, int repeat = 1) {
+range(DType start, DType stop, DType step = 1, int repeat = 1) {
   return RangeExp<DType>(start, stop, step, repeat);
 }
 
@@ -51,14 +51,13 @@ struct Plan<RangeExp<DType>, DType> {
         repeat_(e.repeat_) {
   }
   MSHADOW_XINLINE DType Eval(index_t y, index_t x) const {
-    return static_cast<DType>(start_ +
-                              static_cast<float>((static_cast<int>(x) / repeat_)) *  step_);
+    return start_ + static_cast<DType>((static_cast<int>(x) / repeat_)) * step_;
   }
 
  private:
-  const float start_;
-  const float stop_;
-  const float step_;
+  const DType start_;
+  const DType stop_;
+  const DType step_;
   const int repeat_;
 };
 
@@ -67,6 +66,26 @@ inline Plan<RangeExp<DType>, DType>
 MakePlan(const RangeExp<DType> &exp) {
   return Plan<RangeExp<DType>, DType>(exp);
 }
+
+
+template<typename DType>
+inline int RangeOutSize(DType start, DType stop, DType step, int repeat) {
+  return repeat * ((stop - start - 1) / step + 1);
+}
+
+template<>
+inline int RangeOutSize<float>(float start, float stop, float step, int repeat) {
+  double d_start = static_cast<double>(start);
+  double d_stop = static_cast<double>(stop);
+  double d_step = static_cast<double>(step);
+  return repeat * static_cast<int>(ceil((d_stop - d_start) / d_step));
+}
+
+template<>
+inline int RangeOutSize<double>(double start, double stop, double step, int repeat) {
+  return repeat * static_cast<int>(ceil((stop - start) / step));
+}
+
 
 template<int dim, typename DType>
 struct ShapeCheck<dim, RangeExp<DType> > {
@@ -81,12 +100,11 @@ struct ShapeCheck<dim, RangeExp<DType> > {
     if (t.step_ > 0) {
       CHECK(t.start_ < t.stop_) << "RangeExp does not support (start, stop, step) = "
                                 << "(" << t.start_ << "," << t.stop_ << "," << t.step_ << ")";
-      return Shape1(t.repeat_ * ceil((t.stop_ - t.start_) / t.step_));
     } else {
       CHECK(t.start_ > t.stop_) << "RangeExp does not support (start, stop, step)= "
                                 << "(" << t.start_ << "," << t.stop_ << "," << t.step_ << ")";
-      return Shape1(t.repeat_ * ceil((t.stop_ - t.start_) / t.step_));
     }
+    return Shape1(RangeOutSize<DType>(t.start_, t.stop_, t.step_, t.repeat_));
   }
 };
 

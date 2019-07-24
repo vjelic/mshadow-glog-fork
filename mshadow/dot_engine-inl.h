@@ -7,12 +7,13 @@
 #ifndef MSHADOW_DOT_ENGINE_INL_H_
 #define MSHADOW_DOT_ENGINE_INL_H_
 
+#include <vector>
 #include "./base.h"
 #include "./extension/implicit_gemm.h"
 
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 #include "./cuda/tensor_gpu-inl.cuh"
-#endif  // #ifdef __CUDACC__
+#endif  // #ifdef __HIPCC__
 
 namespace mshadow {
  /*!
@@ -33,14 +34,14 @@ inline void GetBatchedView(DType **dst, DType *src, int num, int stride,
     dst[i] = src + i * stride;
   }
 }
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 namespace cuda {};
 template<typename DType>
 inline void GetBatchedView(DType **dst, DType *src, int num, int stride,
                            Stream<gpu> *stream) {
   cuda::GetBatchedView(dst, src, num, stride, stream);
 }
-#endif  // #ifdef __CUDACC__
+#endif  // #ifdef __HIPCC__
 
 namespace expr {
 //---------------------------------------------------------------------
@@ -291,11 +292,53 @@ struct BLASEngine<cpu, float> {
                                   const float *A, int lda, const float *B, int ldb,
                                   float beta, float *C, int ldc, int batch_count,
                                   float **workspace) {
+#if (MSHADOW_USE_MKL && INTEL_MKL_VERSION >= 20160000)
+  // since same m/n/k is used for all single gemms, so we put all gemms into one group
+  const int GROUP_SIZE = 1;
+  MKL_INT p_m[GROUP_SIZE] = {m};
+  MKL_INT p_n[GROUP_SIZE] = {n};
+  MKL_INT p_k[GROUP_SIZE] = {k};
+  MKL_INT p_lda[GROUP_SIZE] = {lda};
+  MKL_INT p_ldb[GROUP_SIZE] = {ldb};
+  MKL_INT p_ldc[GROUP_SIZE] = {ldc};
+
+  float p_alpha[GROUP_SIZE] = {alpha};
+  float p_beta[GROUP_SIZE] = {beta};
+
+  CBLAS_TRANSPOSE cblas_a_trans = GetT(transa);
+  CBLAS_TRANSPOSE cblas_b_trans = GetT(transb);
+
+  MKL_INT p_group_sizeb[GROUP_SIZE] = {batch_count};
+  CBLAS_TRANSPOSE p_transa[GROUP_SIZE] = {cblas_a_trans};
+  CBLAS_TRANSPOSE p_transb[GROUP_SIZE] = {cblas_b_trans};
+
+  std::vector<const float*> pp_A;
+  std::vector<const float*> pp_B;
+  std::vector<float*> pp_C;
+  pp_A.reserve(batch_count);
+  pp_B.reserve(batch_count);
+  pp_C.reserve(batch_count);
+
+  auto m_k = m * k;
+  auto k_n = k * n;
+  auto m_n = m * n;
+
+  for (int i = 0; i < batch_count; i++) {
+    pp_A[i] = A + i * m_k;
+    pp_B[i] = B + i * k_n;
+    pp_C[i] = C + i * m_n;
+  }
+
+  cblas_sgemm_batch(CblasColMajor, p_transa, p_transb,
+                    p_m, p_n, p_k, p_alpha, pp_A.data(), p_lda, pp_B.data(),
+                    p_ldb, p_beta, pp_C.data(), p_ldc, GROUP_SIZE, p_group_sizeb);
+#else
     for (int i = 0; i < batch_count; ++i) {
       gemm(stream, transa, transb, m, n, k, alpha,
            A + i * m * k, lda, B + i * k * n, ldb,
            beta, C + i * m * n, ldc);
     }
+#endif
   }
   inline static void gemv(Stream<cpu> *stream,
                           bool trans, int m, int n,
@@ -361,11 +404,53 @@ struct BLASEngine<cpu, double> {
                                   const double *A, int lda, const double *B, int ldb,
                                   double beta, double *C, int ldc, int batch_count,
                                   double **workspace) {
+#if (MSHADOW_USE_MKL && INTEL_MKL_VERSION >= 20160000)
+  // since same m/n/k is used for all single gemms, so we put all gemms into one group
+  const int GROUP_SIZE = 1;
+  MKL_INT p_m[GROUP_SIZE] = {m};
+  MKL_INT p_n[GROUP_SIZE] = {n};
+  MKL_INT p_k[GROUP_SIZE] = {k};
+  MKL_INT p_lda[GROUP_SIZE] = {lda};
+  MKL_INT p_ldb[GROUP_SIZE] = {ldb};
+  MKL_INT p_ldc[GROUP_SIZE] = {ldc};
+
+  double p_alpha[GROUP_SIZE] = {alpha};
+  double p_beta[GROUP_SIZE] = {beta};
+
+  CBLAS_TRANSPOSE cblas_a_trans = GetT(transa);
+  CBLAS_TRANSPOSE cblas_b_trans = GetT(transb);
+
+  MKL_INT p_group_sizeb[GROUP_SIZE] = {batch_count};
+  CBLAS_TRANSPOSE p_transa[GROUP_SIZE] = {cblas_a_trans};
+  CBLAS_TRANSPOSE p_transb[GROUP_SIZE] = {cblas_b_trans};
+
+  std::vector<const double*> pp_A;
+  std::vector<const double*> pp_B;
+  std::vector<double*> pp_C;
+  pp_A.reserve(batch_count);
+  pp_B.reserve(batch_count);
+  pp_C.reserve(batch_count);
+
+  auto m_k = m * k;
+  auto k_n = k * n;
+  auto m_n = m * n;
+
+  for (int i = 0; i < batch_count; i++) {
+    pp_A[i] = A + i * m_k;
+    pp_B[i] = B + i * k_n;
+    pp_C[i] = C + i * m_n;
+  }
+
+  cblas_dgemm_batch(CblasColMajor, p_transa, p_transb,
+                    p_m, p_n, p_k, p_alpha, pp_A.data(), p_lda, pp_B.data(),
+                    p_ldb, p_beta, pp_C.data(), p_ldc, GROUP_SIZE, p_group_sizeb);
+#else
     for (int i = 0; i < batch_count; ++i) {
       gemm(stream, transa, transb, m, n, k, alpha,
            A + i * m * k, lda, B + i * k * n, ldb,
            beta, C + i * m * n, ldc);
     }
+#endif
   }
   inline static void gemv(Stream<cpu> *stream,
                           bool trans, int m, int n, double alpha,
@@ -411,17 +496,17 @@ struct BLASEngine<cpu, double> {
 };
 #endif  // MSHADOW_USE_CBLAS || MSHADOW_USE_MKL || MSHADOW_STAND_ALONE
 // CuBLAS redirect code
-#if MSHADOW_USE_CUDA
+#if MSHADOW_USE_GPU
 // All CuBLAS goes to here, use legacy API: not threadsafe
 template<>
 struct BLASEngine<gpu, half::half_t> {
-  inline static cublasOperation_t GetT(bool t) {
-    return t ? CUBLAS_OP_T : CUBLAS_OP_N;
+  inline static hipblasOperation_t GetT(bool t) {
+    return t ? HIPBLAS_OP_T : HIPBLAS_OP_N;
   }
   inline static void SetStream(Stream<gpu> *stream) {
-    cublasStatus_t err = cublasSetStream(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSetStream(Stream<gpu>::GetBlasHandle(stream),
                     Stream<gpu>::GetStream(stream));
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas set stream fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas set stream fail";
   }
   inline static void gemm(Stream<gpu> *stream,
                           bool transa, bool transb,
@@ -429,36 +514,34 @@ struct BLASEngine<gpu, half::half_t> {
                           const half::half_t *A, int lda,
                           const half::half_t *B, int ldb, half::half_t beta,
                           half::half_t *C, int ldc) {
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 7050
-  if (
-#if MSHADOW_USE_PASCAL == 1
-      false ||
-#endif
-      stream->dev_id == -1 || (stream->prop.major <= 5 && stream->prop.minor <= 2)) {
-    // Not PASCAL
-    float alpha_f = float(alpha);  // NOLINT(*)
-    float beta_f = float(beta);  // NOLINT(*)
-  #if CUDA_VERSION >= 8000
-    cublasStatus_t err = cublasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
+//#if defined(CUDA_VERSION) && CUDA_VERSION >= 7050
+#if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 7050)
+  // Always use pseudo-fp16: fp32 compute with fp16 I/O.
+  float alpha_f = float(alpha);  // NOLINT(*)
+  float beta_f = float(beta);  // NOLINT(*)
+  #if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 8000)
+  /*hipblasStatus_t err = hipblasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
                                        GetT(transa), GetT(transb), m, n, k, &alpha_f,
-                                       A, CUDA_R_16F, lda, B, CUDA_R_16F,
-                                       ldb, &beta_f, C, CUDA_R_16F, ldc);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas SgemmEx fail";
+                                       A, HIPBLAS_R_16F, lda, B, HIPBLAS_R_16F,
+                                       ldb, &beta_f, C, HIPBLAS_R_16F, ldc);*/
+  hipblasStatus_t err = hipblasSgemm(Stream<gpu>::GetBlasHandle(stream),
+                                       GetT(transa), GetT(transb), m, n, k, &alpha_f,
+                                       reinterpret_cast<const float*>(A), lda,reinterpret_cast<const float*>(B),
+                                       ldb, &beta_f,reinterpret_cast<float*>(C), ldc);
+
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas SgemmEx fail";
   #else
-    cublasStatus_t err = cublasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
+   /* hipblasStatus_t err = hipblasSgemmEx(Stream<gpu>::GetBlasHandle(stream),
                                        GetT(transa), GetT(transb), m, n, k, &alpha_f,
-                                       A, CUBLAS_DATA_HALF, lda, B, CUBLAS_DATA_HALF,
-                                       ldb, &beta_f, C, CUBLAS_DATA_HALF, ldc);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas SgemmEx fail";
+                                       A, HIPBLAS_R_16F, lda, B, HIPBLAS_R_16F,
+                                       ldb, &beta_f, C, HIPBLAS_R_16F, ldc);*/
+    hipblasStatus_t err = hipblasSgemm(Stream<gpu>::GetBlasHandle(stream),
+                                       GetT(transa), GetT(transb), m, n, k, &alpha,
+                                       A, lda, B,
+                                       ldb, &beta, C, ldc);
+
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas SgemmEx fail";
   #endif  // CUDA_VERSION >= 8000
-  } else {
-    // PASCAL
-    cublasStatus_t err = cublasHgemm(Stream<gpu>::GetBlasHandle(stream),
-                                     GetT(transa), GetT(transb), m, n, k, &alpha.cuhalf_,
-                                     &A->cuhalf_, lda, &B->cuhalf_, ldb,
-                                     &beta.cuhalf_, &C->cuhalf_, ldc);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas Hgemm fail";
-  }
 #else
     LOG(FATAL) << "Require CUDA version >= 7.5!";
 #endif  // defined(CUDA_VERSION) && CUDA_VERSION >= 7050
@@ -469,6 +552,26 @@ struct BLASEngine<gpu, half::half_t> {
                                   const half::half_t *A, int lda, const half::half_t *B, int ldb,
                                   half::half_t beta, half::half_t *C, int ldc, int batch_count,
                                   half::half_t **workspace) {
+#if defined(__CUDACC__) && CUDA_VERSION >= 9000
+    int major = stream->prop.major;
+    int minor = stream->prop.minor;
+    // fp16 is not supported before ARCH 53
+    if ((major > 5) || (major == 5 && minor >= 3)) {
+      const __half* A_h = reinterpret_cast<const __half*>(A);
+      const __half* B_h = reinterpret_cast<const __half*>(B);
+      __half* alpha_h = reinterpret_cast<__half*>(&alpha);
+      __half* beta_h = reinterpret_cast<__half*>(&beta);
+      __half* C_h = reinterpret_cast<__half*>(C);
+      cublasStatus_t err = cublasHgemmStridedBatched(Stream<gpu>::GetBlasHandle(stream),
+        GetT(transa), GetT(transb), m, n, k, alpha_h,
+        A_h, lda, m * k,
+        B_h, ldb, k * n,
+        beta_h, C_h, ldc, m * n,
+        batch_count);
+      CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: HgemmStridedBatched fail";
+      return;
+    }
+#endif
     for (int i = 0; i < batch_count; ++i) {
       gemm(stream, transa, transb, m, n, k, alpha,
            A + i * m * k, lda, B + i * k * n, ldb,
@@ -512,13 +615,13 @@ struct BLASEngine<gpu, half::half_t> {
 
 template<>
 struct BLASEngine<gpu, float> {
-  inline static cublasOperation_t GetT(bool t) {
-    return t ? CUBLAS_OP_T : CUBLAS_OP_N;
+  inline static hipblasOperation_t GetT(bool t) {
+    return t ? HIPBLAS_OP_T : HIPBLAS_OP_N;
   }
   inline static void SetStream(Stream<gpu> *stream) {
-    cublasStatus_t err = cublasSetStream(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSetStream(Stream<gpu>::GetBlasHandle(stream),
                     Stream<gpu>::GetStream(stream));
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: set stream fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: set stream fail";
   }
   inline static void gemm(Stream<gpu> *stream,
                           bool transa, bool transb,
@@ -526,10 +629,10 @@ struct BLASEngine<gpu, float> {
                           const float *A, int lda,
                           const float *B, int ldb, float beta,
                           float *C, int ldc) {
-    cublasStatus_t err = cublasSgemm(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSgemm(Stream<gpu>::GetBlasHandle(stream),
                 GetT(transa), GetT(transb), m, n, k, &alpha,
                 A, lda, B, ldb, &beta, C, ldc);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: Sgemm fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Sgemm fail";
   }
   inline static void batched_gemm(Stream<gpu> *stream,
                                   bool transa, bool transb,
@@ -537,7 +640,7 @@ struct BLASEngine<gpu, float> {
                                   const float *A, int lda, const float *B, int ldb,
                                   float beta, float *C, int ldc, int batch_count,
                                   float **workspace) {
-#if defined(__CUDACC__) && CUDA_VERSION >= 4010
+#if defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 4010 && CUDA_VERSION < 8000))
     // Cast DType* to DType** using workspace as a buffer
     bool alloc_workspace = false;
     if (workspace == NULL) {
@@ -550,31 +653,39 @@ struct BLASEngine<gpu, float> {
     GetBatchedView(workspace + batch_count,
                    const_cast<float*>(B), batch_count, k * n, stream);
     GetBatchedView(workspace + 2 * batch_count, C, batch_count, m * n, stream);
-    cublasStatus_t err = cublasSgemmBatched(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSgemmBatched(Stream<gpu>::GetBlasHandle(stream),
                                             GetT(transa), GetT(transb), m, n, k, &alpha,
                                             (const float**)workspace, lda,
                                             (const float**)(workspace + batch_count), ldb,
                                             &beta, workspace + 2 * batch_count, ldc, batch_count);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: SgemmBatched fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: SgemmBatched fail";
     if (alloc_workspace) {
       hipFree(workspace);
     }
+#elif defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 8000))
+    hipblasStatus_t err = hipblasSgemmStridedBatched(Stream<gpu>::GetBlasHandle(stream),
+      GetT(transa), GetT(transb), m, n, k, &alpha,
+      A, lda, m * k,
+      B, ldb, k * n,
+      &beta, C, ldc, m * n,
+      batch_count);
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Cublas: SgemmStridedBatched fail";
 #else
     for (int i = 0; i < batch_count; ++i) {
       gemm(stream, transa, transb, m, n, k, alpha,
            A + i * m * k, lda, B + i * k * n, ldb,
            beta, C + i * m * n, ldc);
     }
-#endif  // defined(__CUDACC__) && CUDA_VERSION >= 4010
+#endif  // defined(__HIPCC__) && CUDA_VERSION >= 4010
   }
   inline static void gemv(Stream<gpu> *stream,
                           bool trans, int m, int n, float alpha,
                           const float *A, int lda,
                           const float *X, int incX, float beta,
                           float *Y, int incY) {
-    cublasStatus_t err = cublasSgemv(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSgemv(Stream<gpu>::GetBlasHandle(stream),
                 GetT(trans), m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: Sgemv fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Sgemv fail";
   }
   inline static void batched_gemv(Stream<gpu> *stream,
                                   bool trans, int m, int n,
@@ -591,9 +702,9 @@ struct BLASEngine<gpu, float> {
                          int m, int n, float alpha,
                          const float *X, int incX,
                          const float *Y, int incY, float *A, int lda) {
-    cublasStatus_t err = cublasSger(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSger(Stream<gpu>::GetBlasHandle(stream),
                                     m, n, &alpha, X, incX, Y, incY, A, lda);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: Sger fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Sger fail";
   }
   inline static void batched_ger(Stream<gpu> *stream,
                          int m, int n, float alpha,
@@ -609,25 +720,25 @@ struct BLASEngine<gpu, float> {
                          const float* X, int incX,
                          const float* Y, int incY,
                          float *ret) {
-    cublasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
-                         CUBLAS_POINTER_MODE_DEVICE);
-    cublasStatus_t err = cublasSdot(Stream<gpu>::GetBlasHandle(stream),
+    hipblasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
+                         HIPBLAS_POINTER_MODE_DEVICE);
+    hipblasStatus_t err = hipblasSdot(Stream<gpu>::GetBlasHandle(stream),
                                     n, X, incX, Y, incY, ret);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: Dot fail";
-    cublasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
-                         CUBLAS_POINTER_MODE_HOST);
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Dot fail";
+    hipblasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
+                         HIPBLAS_POINTER_MODE_HOST);
   }
 };
 
 template<>
 struct BLASEngine<gpu, double> {
-  inline static cublasOperation_t GetT(bool t) {
-    return t ? CUBLAS_OP_T : CUBLAS_OP_N;
+  inline static hipblasOperation_t GetT(bool t) {
+    return t ? HIPBLAS_OP_T : HIPBLAS_OP_N;
   }
   inline static void SetStream(Stream<gpu> *stream) {
-    cublasStatus_t err = cublasSetStream(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasSetStream(Stream<gpu>::GetBlasHandle(stream),
                     Stream<gpu>::GetStream(stream));
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: set stream fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: set stream fail";
   }
   inline static void gemm(Stream<gpu> *stream,
                           bool transa, bool transb,
@@ -635,10 +746,10 @@ struct BLASEngine<gpu, double> {
                           const double *A, int lda,
                           const double *B, int ldb,
                           double beta, double *C, int ldc) {
-    cublasStatus_t err = cublasDgemm(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasDgemm(Stream<gpu>::GetBlasHandle(stream),
                 GetT(transa), GetT(transb), m, n, k, &alpha,
                 A, lda, B, ldb, &beta, C, ldc);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: Dgemm fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Dgemm fail";
   }
   inline static void batched_gemm(Stream<gpu> *stream,
                                   bool transa, bool transb,
@@ -646,7 +757,7 @@ struct BLASEngine<gpu, double> {
                                   const double *A, int lda, const double *B, int ldb,
                                   double beta, double *C, int ldc, int batch_count,
                                   double **workspace) {
-#if defined(__CUDACC__) && CUDA_VERSION >= 4010
+#if defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 4010 && CUDA_VERSION < 8000))
     // Cast DType* to DType** using workspace as a buffer
     bool alloc_workspace = false;
     if (workspace == NULL) {
@@ -659,31 +770,39 @@ struct BLASEngine<gpu, double> {
     GetBatchedView(workspace + batch_count,
                    const_cast<double*>(B), batch_count, k * n, stream);
     GetBatchedView(workspace + 2 * batch_count, C, batch_count, m * n, stream);
-    cublasStatus_t err = cublasDgemmBatched(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasDgemmBatched(Stream<gpu>::GetBlasHandle(stream),
                                             GetT(transa), GetT(transb), m, n, k, &alpha,
                                             (const double**)workspace, lda,
                                             (const double**)(workspace + batch_count), ldb,
                                             &beta, workspace + 2 * batch_count, ldc, batch_count);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: DgemmBatched fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: DgemmBatched fail";
     if (alloc_workspace) {
       hipFree(workspace);
     }
+#elif defined(__HIPCC__) && (defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 8000))
+    hipblasStatus_t err = hipblasDgemmStridedBatched(Stream<gpu>::GetBlasHandle(stream),
+      GetT(transa), GetT(transb), m, n, k, &alpha,
+      A, lda, m * k,
+      B, ldb, k * n,
+      &beta, C, ldc, m * n,
+      batch_count);
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: DgemmStridedBatched fail";
 #else
     for (int i = 0; i < batch_count; ++i) {
       gemm(stream, transa, transb, m, n, k, alpha,
            A + i * m * k, lda, B + i * k * n, ldb,
            beta, C + i * m * n, ldc);
     }
-#endif  // defined(__CUDACC__) && CUDA_VERSION >= 4010
+#endif  // defined(__HIPCC__) && CUDA_VERSION >= 4010
   }
   inline static void gemv(Stream<gpu> *stream,
                           bool trans, int m, int n, double alpha,
                           const double *A, int lda,
                           const double *X, int incX,
                           double beta, double *Y, int incY) {
-    cublasStatus_t err = cublasDgemv(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasDgemv(Stream<gpu>::GetBlasHandle(stream),
                 GetT(trans), m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: Dgemv fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Dgemv fail";
   }
   inline static void batched_gemv(Stream<gpu> *stream,
                                   bool trans, int m, int n,
@@ -700,9 +819,9 @@ struct BLASEngine<gpu, double> {
                          int m, int n, double alpha,
                          const double *X, int incX,
                          const double *Y, int incY, double *A, int lda) {
-    cublasStatus_t err = cublasDger(Stream<gpu>::GetBlasHandle(stream),
+    hipblasStatus_t err = hipblasDger(Stream<gpu>::GetBlasHandle(stream),
                                     m, n, &alpha, X, incX, Y, incY, A, lda);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: Dger fail";
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Dger fail";
   }
   inline static void batched_ger(Stream<gpu> *stream,
                          int m, int n, double alpha,
@@ -718,16 +837,16 @@ struct BLASEngine<gpu, double> {
                          const double* X, int incX,
                          const double* Y, int incY,
                          double *ret) {
-    cublasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
-                         CUBLAS_POINTER_MODE_DEVICE);
-    cublasStatus_t err = cublasDdot(Stream<gpu>::GetBlasHandle(stream),
+    hipblasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
+                         HIPBLAS_POINTER_MODE_DEVICE);
+    hipblasStatus_t err = hipblasDdot(Stream<gpu>::GetBlasHandle(stream),
                                     n, X, incX, Y, incY, ret);
-    CHECK_EQ(err, CUBLAS_STATUS_SUCCESS) << "Cublas: Dot fail";
-    cublasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
-                         CUBLAS_POINTER_MODE_HOST);
+    CHECK_EQ(err, HIPBLAS_STATUS_SUCCESS) << "Hipblas: Dot fail";
+    hipblasSetPointerMode(Stream<gpu>::GetBlasHandle(stream),
+                         HIPBLAS_POINTER_MODE_HOST);
   }
 };
-#endif  // MSHADOW_USE_CUDA
+#endif  // MSHADOW_USE_GPU
 // helper function to decide which shape we are in
 inline Shape<2> GetShape(const Shape<2> &shape, bool transpose) {
   return transpose ? Shape2(shape[1], shape[0]) : shape;

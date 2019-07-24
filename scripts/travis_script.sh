@@ -1,11 +1,11 @@
 # main script of travis
 if [ ${TASK} == "lint" ]; then
-    dmlc-core/scripts/lint.py mshadow all mshadow mshadow-ps || exit -1
+    python3 dmlc-core/scripts/lint.py mshadow all mshadow mshadow-ps || exit -1
 fi
 
 if [ ${TASK} == "doc" ]; then
     doxygen doc/Doxyfile 2>log.txt
-    (cat log.txt| grep -v ENABLE_PREPROCESSING |grep -v "unsupported tag" |grep warning) && exit -1
+    (cat log.txt| grep -v ENABLE_PREPROCESSING |grep -v "unsupported tag" |grep nothing) && exit -1
 fi
 
 if [ ${TASK} == "build" ]; then

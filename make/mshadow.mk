@@ -8,10 +8,18 @@
 #  Add MSHADOW_NVCCFLAGS to the nvcc compile flags
 #----------------------------------------------------------------------------------------
 
-MSHADOW_CFLAGS = -funroll-loops -Wno-unused-variable -Wno-unused-parameter -Wno-unknown-pragmas -Wno-unused-local-typedefs
+MSHADOW_CFLAGS = -funroll-loops -Wno-unused-parameter -Wno-unknown-pragmas -Wno-unused-local-typedefs
 MSHADOW_LDFLAGS = -lm
 MSHADOW_NVCCFLAGS =
 
+
+# atlas blas library has different name on CentOS
+OS := $(shell cat /etc/system-release 2>/dev/null)
+ifeq ($(findstring CentOS,$(OS)), CentOS)
+  ATLAS_LDFLAGS := -lsatlas -L/usr/lib64/atlas
+else
+  ATLAS_LDFLAGS := -lcblas
+endif
 
 ifndef USE_SSE
 	USE_SSE=1
@@ -23,10 +31,44 @@ else
 	MSHADOW_CFLAGS += -DMSHADOW_USE_SSE=0
 endif
 
-ifeq ($(USE_CUDA), 0)
-	MSHADOW_CFLAGS += -DMSHADOW_USE_CUDA=0
+# whether to use F16C instruction set extension for fast fp16 compute on CPU
+# if cross compiling you may want to explicitly turn it off if target system does not support it
+ifndef USE_F16C
+    ifneq ($(OS),Windows_NT)
+        detected_OS := $(shell uname -s)
+        ifeq ($(detected_OS),Darwin)
+            F16C_SUPP = $(shell sysctl -a | grep machdep.cpu.features | grep F16C)
+        endif
+        ifeq ($(detected_OS),Linux)
+            F16C_SUPP = $(shell cat /proc/cpuinfo | grep flags | grep f16c)
+        endif
+	ifneq ($(strip $(F16C_SUPP)),)
+                USE_F16C=1
+        else
+                USE_F16C=0
+        endif
+    endif
+    # if OS is Windows, check if your processor and compiler support F16C architecture.
+    # One way to check if processor supports it is to download the tool 
+    # https://docs.microsoft.com/en-us/sysinternals/downloads/coreinfo.
+    # If coreinfo -c shows F16C and compiler supports it, 
+    # then you can set USE_F16C=1 explicitly to leverage that capability"
+endif
+
+ifeq ($(USE_F16C), 1)
+        MSHADOW_CFLAGS += -mf16c
 else
-	MSHADOW_LDFLAGS += -lcudart -lcublas -lcurand
+        MSHADOW_CFLAGS += -DMSHADOW_USE_F16C=0
+endif
+
+ifeq ($(USE_GPU), 0)
+	MSHADOW_CFLAGS += -DMSHADOW_USE_GPU=0
+else
+	ifneq (, $(findstring nvcc, $(HIP_PLATFORM)))
+		MSHADOW_LDFLAGS += -lcudart -lcufft -lcurand -lcusolver -lcublas
+        else
+		MSHADOW_LDFLAGS +=
+        endif
 endif
 ifneq ($(USE_CUDA_PATH), NONE)
 	MSHADOW_CFLAGS += -I$(USE_CUDA_PATH)/include
@@ -66,7 +108,12 @@ endif
 
 ifeq ($(USE_MKLML), 1)
 	MSHADOW_CFLAGS += -I$(MKLROOT)/include
-	MSHADOW_LDFLAGS += -Wl,--as-needed -lmklml_intel -lmklml_gnu -liomp5 -L$(MKLROOT)/lib/
+	ifneq ($(shell uname),Darwin)
+		MSHADOW_LDFLAGS += -Wl,--as-needed -lmklml_intel -lmklml_gnu
+	else
+		MSHADOW_LDFLAGS += -lmklml
+	endif
+	MSHADOW_LDFLAGS += -liomp5 -L$(MKLROOT)/lib/
 endif
 
 ifeq ($(USE_BLAS), openblas)
@@ -74,7 +121,7 @@ ifeq ($(USE_BLAS), openblas)
 else ifeq ($(USE_BLAS), perfblas)
 	MSHADOW_LDFLAGS += -lperfblas
 else ifeq ($(USE_BLAS), atlas)
-	MSHADOW_LDFLAGS += -lcblas
+	MSHADOW_LDFLAGS += $(ATLAS_LDFLAGS)
 else ifeq ($(USE_BLAS), blas)
 	MSHADOW_LDFLAGS += -lblas
 else ifeq ($(USE_BLAS), apple)
@@ -117,6 +164,7 @@ else
 	MSHADOW_CFLAGS+= -DMSHADOW_DIST_PS=0
 endif
 
-# Set MSHADOW_USE_PASCAL to one to enable nvidia pascal gpu features.
-# Like cublasHgemm
+# MSHADOW_USE_PASCAL=1 used to enable true-fp16 gemms.  Now, mshadow
+# only uses pseudo-fp16 gemms, so this flag will be removed after
+# dependent projects no longer reference it.
 MSHADOW_CFLAGS += -DMSHADOW_USE_PASCAL=0
