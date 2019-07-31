@@ -31,7 +31,7 @@ struct Stream<gpu> {
   cusolverDnHandle_t solver_handle_;
   #endif
   /*! \brief cudnn handle */
-  #if MSHADOW_USE_CUDNN == 1
+  #if MSHADOW_USE_MIOPEN == 1
   miopenHandle_t dnn_handle_;
   #endif
   /*! \brief hipblas handle ownership */
@@ -48,7 +48,7 @@ struct Stream<gpu> {
   Stream(void)
     : stream_(0)
       , blas_handle_(0)
-#if MSHADOW_USE_CUDNN == 1
+#if MSHADOW_USE_MIOPEN == 1
       , dnn_handle_(0)
 #endif
       , blas_handle_ownership_(NoHandle)
@@ -142,8 +142,8 @@ struct Stream<gpu> {
     this->solver_handle_ownership_ = OwnHandle;
 #endif
   }
-// #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
-#if MSHADOW_USE_CUDNN == 1
+// #if MSHADOW_USE_MIOPEN && defined(__HIPCC__)
+#if MSHADOW_USE_MIOPEN == 1
   inline static miopenHandle_t GetDnnHandle(Stream<gpu> *stream) {
     if (stream == NULL) {
       return 0;
@@ -154,8 +154,8 @@ struct Stream<gpu> {
   }
 #endif
   inline void DestroyDnnHandle() {
-// #if MSHADOW_USE_CUDNN && defined(__HIPCC__)
-#if MSHADOW_USE_CUDNN == 1
+// #if MSHADOW_USE_MIOPEN && defined(__HIPCC__)
+#if MSHADOW_USE_MIOPEN == 1
     if (dnn_handle_ownership_ == OwnHandle) {
       miopenStatus_t err = miopenDestroy(dnn_handle_);
       this->dnn_handle_ownership_ = NoHandle;
@@ -164,8 +164,8 @@ struct Stream<gpu> {
 #endif
   }
   inline void CreateDnnHandle() {
-// #if MSHADOW_USE_CUDNN == 1 && defined(__HIPCC__)
-#if MSHADOW_USE_CUDNN == 1
+// #if MSHADOW_USE_MIOPEN == 1 && defined(__HIPCC__)
+#if MSHADOW_USE_MIOPEN == 1
     this->DestroyDnnHandle();
     miopenStatus_t err = miopenCreate(&dnn_handle_);
     CHECK_EQ(err, miopenStatusSuccess) << (err);
