@@ -15,7 +15,7 @@
 #include "./tensor.h"
 #include "./expression.h"
 
-
+#include "hip/hip_runtime.h"
 namespace mshadow {
 /*! \brief namespace of packet math*/
 namespace packet {

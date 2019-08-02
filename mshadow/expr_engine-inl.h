@@ -6,6 +6,7 @@
  */
 #ifndef MSHADOW_EXPR_ENGINE_INL_H_
 #define MSHADOW_EXPR_ENGINE_INL_H_
+#include "hip/hip_runtime.h"
 #include <utility>
 #include <algorithm>
 #include "./logging.h"

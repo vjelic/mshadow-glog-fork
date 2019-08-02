@@ -11,9 +11,12 @@
   #include <thrust/device_ptr.h>
   #include <thrust/sort.h>
 #endif
-#if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 7000)
+#if defined (__HIP_PLATFORM_HCC__)
 #include <thrust/system/hip/execution_policy.h>
+#elif defined (__HIP_PLATFORM_NVCC__)
+#include <thrust/system/cuda/execution_policy.h>
 #endif
+
 #include "../tensor.h"
 #include "./reduce.cuh"
 #define MSHADOW_CUDA_POST_KERNEL_CHECK(x) \
@@ -767,18 +770,31 @@ inline void SortByKey(Tensor<gpu, 1, KDType> keys, Tensor<gpu, 1, VDType> values
                       bool is_ascend) {
   CHECK_EQ(keys.CheckContiguous(), true);
   CHECK_EQ(values.CheckContiguous(), true);
-#if defined(__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 7000)
+#if defined (__HIP_PLATFORM_HCC__) || (defined(__HIP_PLATFORM_NVCC__) && CUDA_VERSION >= 7000)
   hipStream_t stream = Stream<gpu>::GetStream(keys.stream_);
   thrust::device_ptr<KDType> key_iter = thrust::device_pointer_cast(keys.dptr_);
   thrust::device_ptr<VDType> value_iter = thrust::device_pointer_cast(values.dptr_);
   if (is_ascend) {
-    thrust::stable_sort_by_key(
+#if defined (__HIP_PLATFORM_HCC__)
+     thrust::stable_sort_by_key(
       thrust::hip::par.on(stream),
       key_iter, key_iter + keys.size(0), value_iter, thrust::less<KDType>());  // NOLINT(*)
-  } else {
+#elif defined (__HIP_PLATFORM_NVCC__)
     thrust::stable_sort_by_key(
+      thrust::cuda::par.on(stream),
+      key_iter, key_iter + keys.size(0), value_iter, thrust::less<KDType>());  // NOLINT(*)
+#endif
+  } else {
+#if defined (__HIP_PLATFORM_HCC__)
+  thrust::stable_sort_by_key(
       thrust::hip::par.on(stream),
       key_iter, key_iter + keys.size(0), value_iter, thrust::greater<KDType>());  // NOLINT(*)
+
+#elif defined (__HIP_PLATFORM_NVCC__)
+    thrust::stable_sort_by_key(
+      thrust::cuda::par.on(stream),
+      key_iter, key_iter + keys.size(0), value_iter, thrust::greater<KDType>());  // NOLINT(*)
+#endif   
   }
   MSHADOW_CUDA_POST_KERNEL_CHECK(SortByKey);
 #else
