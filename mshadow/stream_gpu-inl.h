@@ -51,7 +51,7 @@ struct Stream<gpu> {
   Stream(void)
     : stream_(0)
       , blas_handle_(0)
-#if MSHADOW_USE_CUDNN == 1 || MXNET_USE_MIOPEN == 1
+#if MSHADOW_USE_CUDNN == 1 || MSHADOW_USE_MIOPEN == 1
       , dnn_handle_(0)
 #endif
       , blas_handle_ownership_(NoHandle)
